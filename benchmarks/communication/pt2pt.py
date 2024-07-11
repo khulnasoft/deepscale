@@ -8,7 +8,7 @@ def timed_pt2pt(input, args):
     if args.dist == 'torch':
         import torch.distributed as dist
     elif args.dist == 'deepscale':
-        import deepscale.comm as dist
+        import deepscale.khulnasoft.com as dist
 
     sync_all()
     # Warmups, establish connections, etc.
@@ -61,7 +61,7 @@ def run_pt2pt(local_rank, args):
     if args.dist == 'torch':
         import torch.distributed as dist
     elif args.dist == 'deepscale':
-        import deepscale.comm as dist
+        import deepscale.khulnasoft.com as dist
 
     # Prepare benchmark header
     print_header(args, 'pt2pt')

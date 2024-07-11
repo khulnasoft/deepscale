@@ -8,7 +8,7 @@ def timed_all_to_all(input, output, args):
     if args.dist == 'torch':
         import torch.distributed as dist
     elif args.dist == 'deepscale':
-        import deepscale.comm as dist
+        import deepscale.khulnasoft.com as dist
 
     sync_all()
     # Warmups, establish connections, etc.
@@ -42,7 +42,7 @@ def run_all_to_all(local_rank, args):
     if args.dist == 'torch':
         import torch.distributed as dist
     elif args.dist == 'deepscale':
-        import deepscale.comm as dist
+        import deepscale.khulnasoft.com as dist
 
     world_size = dist.get_world_size()
     global_rank = dist.get_rank()

@@ -18,7 +18,7 @@ def init_torch_distributed(backend):
 def init_deepscale_comm(backend):
     global dist
     import deepscale
-    import deepscale.comm as dist
+    import deepscale.khulnasoft.com as dist
     deepscale.init_distributed(dist_backend=backend)
     local_rank = int(os.environ['LOCAL_RANK'])
     torch.cuda.set_device(local_rank)
