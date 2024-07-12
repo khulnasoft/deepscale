@@ -62,12 +62,14 @@ mask = pipe.tokenizer.mask_token
 
 br = pipe(f"Hello I'm a {mask} model")
 if args.deepscale:
-    pipe.model = deepscale.init_inference(pipe.model,
-                                          dtype=dtype,
-                                          mp_size=1,
-                                          replace_with_kernel_inject=args.kernel_inject,
-                                          replace_method='auto',
-                                          enable_cuda_graph=args.graphs)
+    pipe.model = deepscale.init_inference(
+        pipe.model,
+        dtype=dtype,
+        mp_size=1,
+        replace_with_kernel_inject=args.kernel_inject,
+        replace_method="auto",
+        enable_cuda_graph=args.graphs,
+    )
     pipe.model.profile_model_time()
 
 responses = []
@@ -82,7 +84,7 @@ for i in range(args.trials):
     responses.append(r)
     times.append((end - start))
     mtimes += pipe.model.model_times()
-    #print(f"{pipe.model.model_times()=}")
+    # print(f"{pipe.model.model_times()=}")
 
 print_latency(times, "e2e latency")
 print_latency(mtimes, "model latency")
