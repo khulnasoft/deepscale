@@ -1,3 +1,8 @@
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+# DeepScale Team
+
 from ..utils import call_to_str
 
 from abc import ABC, abstractmethod
@@ -40,6 +45,7 @@ class PipeSchedule(ABC):
         stages (int): The number of pipeline stages.
         stage_id (int): The pipe stage that will execute the generated schedule.
     """
+
     def __init__(self, micro_batches, stages, stage_id):
         super().__init__()
         self.micro_batches = micro_batches
@@ -127,7 +133,9 @@ class PipeSchedule(ABC):
 
 
 class InferenceSchedule(PipeSchedule):
-    """A schedule for inferencing batches using pipeline parallelism."""
+    """A schedule for inferencing batches using pipeline parallelism.
+    """
+
     def steps(self):
         """"""
         prev_micro_batch_id = -1
@@ -185,6 +193,7 @@ class TrainSchedule(PipeSchedule):
     convergence follows that of a data parallel approach with the same batch
     size.
     """
+
     def steps(self):
         """"""
         prev_micro_batch_id = -1
@@ -203,19 +212,15 @@ class TrainSchedule(PipeSchedule):
 
             # Exchange activations
             if is_forward:
-                if self._valid_micro_batch(micro_batch_id) and self._valid_stage(
-                        self.prev_stage):
-                    cmds.append(RecvActivation(curr_buffer))
-                if self._valid_micro_batch(prev_micro_batch_id) and self._valid_stage(
-                        self.prev_stage):
+                if self._valid_micro_batch(prev_micro_batch_id) and self._valid_stage(self.prev_stage):
                     cmds.append(SendGrad(prev_buffer))
+                if self._valid_micro_batch(micro_batch_id) and self._valid_stage(self.prev_stage):
+                    cmds.append(RecvActivation(curr_buffer))
             else:
-                if self._valid_micro_batch(prev_micro_batch_id) and self._valid_stage(
-                        self.next_stage):
-                    cmds.append(SendActivation(prev_buffer))
-                if self._valid_micro_batch(micro_batch_id) and self._valid_stage(
-                        self.next_stage):
+                if self._valid_micro_batch(micro_batch_id) and self._valid_stage(self.next_stage):
                     cmds.append(RecvGrad(curr_buffer))
+                if self._valid_micro_batch(prev_micro_batch_id) and self._valid_stage(self.next_stage):
+                    cmds.append(SendActivation(prev_buffer))
 
             # First/last stage loads
             if self.stage_id == 0 or self.stage_id == self.stages - 1:
@@ -240,8 +245,14 @@ class TrainSchedule(PipeSchedule):
             yield cmds
 
     def num_pipe_buffers(self):
-        """As many buffers as the distance from this stage to the last stage."""
-        buffers = min(self.stages - self.stage_id + 1, self.micro_batches)
+        """Return the number of pipeline buffers required for this stage.
+
+        This is equivalent to the maximum number of in-flight forward passes,
+        since we need to remember the activations of forward passes in order
+        to run backpropagation. For synchronous 1F1B, this is equivalent to
+        the index difference between this stage and the last stage.
+        """
+        buffers = min(self.stages - self.stage_id, self.micro_batches)
         return max(2, buffers)
 
     def _step_to_micro_batch(self, step_id):
@@ -291,6 +302,7 @@ class DataParallelSchedule(PipeSchedule):
     """An example schedule that trains using traditional data parallelism with gradient
     accumulation.
     """
+
     def steps(self):
         """"""
         for step_id in range(self.micro_batches):
@@ -307,7 +319,8 @@ class DataParallelSchedule(PipeSchedule):
             yield cmds
 
     def num_pipe_buffers(self):
-        """Only one pipeline buffer needed."""
+        """Only one pipeline buffer needed.
+        """
         return 1
 
 
@@ -320,6 +333,7 @@ class PipeInstruction:
     Args:
         kwargs (optional): keyword arguments to store as members
     """
+
     def __init__(self, **kwargs):
         self.name = self.__class__.__name__
         self.kwargs = kwargs
@@ -337,13 +351,12 @@ class OptimizerStep(PipeInstruction):
 
     .. note:: Can be a synchronization point among data-parallel ranks.
     """
-
     pass
 
 
 class ReduceGrads(PipeInstruction):
-    """Reduce the computed gradients among data-parallel processes within the stage."""
-
+    """Reduce the computed gradients among data-parallel processes within the stage.
+    """
     pass
 
 
@@ -356,7 +369,6 @@ class ReduceTiedGrads(PipeInstruction):
         includes all pipeline stages. This instruction should be scheduled
         carefully to avoid deadlocks.
     """
-
     pass
 
 
@@ -366,6 +378,7 @@ class BufferOpInstruction(PipeInstruction):
     Args:
         buffer_id (int): the index of the pipeline buffer() to modify.
     """
+
     def __init__(self, buffer_id, **kwargs):
         super().__init__(buffer_id=buffer_id, **kwargs)
 
@@ -380,7 +393,6 @@ class LoadMicroBatch(BufferOpInstruction):
 
         buffers['inputs'][buffer_id] = next(data_iter)
     """
-
     pass
 
 
@@ -392,9 +404,8 @@ class ForwardPass(BufferOpInstruction):
 
     .. code-block:: python
 
-        buffers['ouputs'][buffer_id] = forward(buffers['inputs'][buffer_id])
+        buffers['outputs'][buffer_id] = forward(buffers['inputs'][buffer_id])
     """
-
     pass
 
 
@@ -405,12 +416,11 @@ class BackwardPass(BufferOpInstruction):
 
     .. code-block:: python
 
-        outputs = buffers['ouputs'][buffer_id]
+        outputs = buffers['outputs'][buffer_id]
         gradients = buffers['gradients'][buffer_id]
         torch.autograd.backward(tensors=outputs,
                                 grad_tensors=gradients)
     """
-
     pass
 
 
@@ -428,7 +438,6 @@ class SendActivation(BufferOpInstruction):
         The communication is blocking and must be paired with a :class:`RecvActivation`
         on the next pipeline stage to avoid deadlock.
     """
-
     pass
 
 
@@ -445,7 +454,6 @@ class RecvActivation(BufferOpInstruction):
         The communication is blocking and must be paired with a :class:`SendActivation`
         on the previous pipeline stage to avoid deadlock.
     """
-
     pass
 
 
@@ -461,7 +469,6 @@ class SendGrad(BufferOpInstruction):
         The communication is blocking and must be paired with a :class:`RecvGrad`
         on the previous pipeline stage to avoid deadlock.
     """
-
     pass
 
 
@@ -476,7 +483,6 @@ class RecvGrad(BufferOpInstruction):
         The communication is blocking and must be paired with a :class:`SendGrad`
         on the next pipeline stage to avoid deadlock.
     """
-
     pass
 
 

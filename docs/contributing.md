@@ -27,7 +27,7 @@ and then repeat the previous `git commit` command.
 ## Testing
 DeepScale tracks two types of tests: unit tests and more costly model convergence tests.
 The model convergence tests train
-[DeepScaleExamples](https://github.com/khulnasoft-lab/DeepScaleExamples/) and measure
+[DeepScaleExamples](https://github.com/khulnasoft/DeepScaleExamples/) and measure
 end-to-end convergence and related metrics. Unit tests are found in `tests/unit/` and
 the model convergence tests are found in `tests/model/`.
 
@@ -44,10 +44,10 @@ tests. Note that [pytest-forked](https://github.com/pytest-dev/pytest-forked) an
 
 ### Model Tests
 Model tests require four GPUs and training data downloaded for
-[DeepScaleExamples](https://github.com/khulnasoft-lab/DeepScaleExamples/).
+[DeepScaleExamples](https://github.com/khulnasoft/DeepScaleExamples/).
 
 To execute model tests, first [install DeepScale](/getting-started/#installation). The
-[DeepScaleExamples](https://github.com/khulnasoft-lab/DeepScaleExamples/) repository is cloned
+[DeepScaleExamples](https://github.com/khulnasoft/DeepScaleExamples/) repository is cloned
 as part of this process. Next, execute the model test driver:
 ```bash
 cd tests/model/
@@ -59,7 +59,7 @@ Note that the `--forked` flag is not necessary for the model tests.
 This project welcomes contributions and suggestions. Most contributions require you to
 agree to a Contributor License Agreement (CLA) declaring that you have the right to, and
 actually do, grant us the rights to use your contribution. For details, visit
-[https://cla.opensource.khulnasoft.com](https://cla.opensource.khulnasoft.com).
+[https://cla.opensource.microsoft.com](https://cla.opensource.microsoft.com).
 
 When you submit a pull request, a CLA bot will automatically determine whether you need
 to provide a CLA and decorate the PR appropriately (e.g., status check, comment). Simply
@@ -67,8 +67,8 @@ follow the instructions provided by the bot. You will only need to do this once 
 all repos using our CLA.
 
 ## Code of Conduct
-This project has adopted the [Khulnasoft Open Source Code of
-Conduct](https://opensource.khulnasoft.com/codeofconduct/). For more information see the
-[Code of Conduct FAQ](https://opensource.khulnasoft.com/codeofconduct/faq/) or contact
-[opencode@khulnasoft.com](mailto:opencode@khulnasoft.com) with any additional questions or
+This project has adopted the [Microsoft Open Source Code of
+Conduct](https://opensource.microsoft.com/codeofconduct/). For more information see the
+[Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact
+[opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or
 comments.

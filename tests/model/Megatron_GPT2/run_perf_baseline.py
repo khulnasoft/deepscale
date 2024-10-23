@@ -1,17 +1,18 @@
-# coding=utf-8
-# Copyright (c) 2024, The KhulnaSoft DeepScale Team. All rights reserved.
-#
-# Note: please copy webtext data to "Megatron-LM" folder, before running this script.
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+# DeepScale Team
+"""
+Note: please copy webtext data to "Megatron-LM" folder, before running this script.
+"""
 
 import unittest
-import subprocess
-import os
-import time
 import re
 from test_common import BaseTestCase
 
 
 class GPT2PerfBaselineTestCase(BaseTestCase):
+
     def __init__(self, methodName="DeepScale performance test on GPT2 model"):
         super(GPT2PerfBaselineTestCase, self).__init__(methodName)
 
@@ -92,20 +93,16 @@ class GPT2PerfBaselineTestCase(BaseTestCase):
         if exec_time == 0.0:
             print("{0}: no latency found in file {1}".format(self.id(), test_file))
         else:
-            print("{0}: execution time per iteration is {1}ms.".format(
-                self.id(),
-                exec_time))
+            print("{0}: execution time per iteration is {1}ms.".format(self.id(), exec_time))
 
     def grep_latency_from_file(self, file_name):
         latency = 0.0
         count = 0
 
-        with open(file_name, "r") as f:
+        with open(file_name, 'r') as f:
             lines = f.readlines()
             line_filter = "elapsed time per iteration"
-            match_number = re.compile(
-                "elapsed time per iteration \(ms\): ([-+]?[0-9]+\.?[0-9]*(?:[Ee][-+]?[0-9]+)?)"
-            )
+            match_number = re.compile(r'elapsed time per iteration \(ms\): ([-+]?[0-9]+\.?[0-9]*(?:[Ee][-+]?[0-9]+)?)')
 
             for line in lines:
                 if line_filter in line:
@@ -121,13 +118,13 @@ class GPT2PerfBaselineTestCase(BaseTestCase):
 
 def suite():
     suite = unittest.TestSuite()
-    suite.addTest(GPT2PerfBaselineTestCase("test_perf_1_5B"))
-    suite.addTest(GPT2PerfBaselineTestCase("test_perf_4B"))
-    suite.addTest(GPT2PerfBaselineTestCase("test_perf_8B"))
-    suite.addTest(GPT2PerfBaselineTestCase("test_perf_20B"))
+    suite.addTest(GPT2PerfBaselineTestCase('test_perf_1_5B'))
+    suite.addTest(GPT2PerfBaselineTestCase('test_perf_4B'))
+    suite.addTest(GPT2PerfBaselineTestCase('test_perf_8B'))
+    suite.addTest(GPT2PerfBaselineTestCase('test_perf_20B'))
     return suite
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     runner = unittest.TextTestRunner(failfast=True)
     runner.run(suite())

@@ -1,6 +1,7 @@
-/*
-Copyright 2024 The KhulnaSoft DeepScale Team
-*/
+// Copyright (c) Microsoft Corporation.
+// SPDX-License-Identifier: Apache-2.0
+
+// DeepScale Team
 
 #include "dequantization_utils.h"
 #include "memory_access_utils.h"

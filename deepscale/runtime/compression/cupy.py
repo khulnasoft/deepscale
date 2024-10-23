@@ -1,6 +1,7 @@
-"""
-Copyright 2024 The KhulnaSoft DeepScale Team
-"""
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+# DeepScale Team
 
 import cupy
 from torch.utils.dlpack import to_dlpack
@@ -8,6 +9,7 @@ from torch.utils.dlpack import from_dlpack
 
 
 class CupyBackend(object):
+
     def __init__(self):
         pass
 

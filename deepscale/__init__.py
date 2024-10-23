@@ -1,30 +1,49 @@
-"""
-Copyright 2024 The KhulnaSoft DeepScale Team
-"""
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+# DeepScale Team
 
 import sys
 import types
-
+import json
+from typing import Optional, Union
+import torch
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import _LRScheduler
 from packaging import version as pkg_version
+
+# Skip Triton import for AMD due to pytorch-triton-rocm module breaking device API in DeepScale
+if not (hasattr(torch.version, 'hip') and torch.version.hip is not None):
+    try:
+        import triton  # noqa: F401 # type: ignore
+        HAS_TRITON = True
+    except ImportError:
+        HAS_TRITON = False
+else:
+    HAS_TRITON = False
 
 from . import ops
 from . import module_inject
 
-from .runtime.engine import DeepScaleEngine
+from .accelerator import get_accelerator
+from .constants import TORCH_DISTRIBUTED_DEFAULT_PORT
+from .runtime.engine import DeepScaleEngine, DeepScaleOptimizerCallable, DeepScaleSchedulerCallable
 from .runtime.engine import ADAM_OPTIMIZER, LAMB_OPTIMIZER
+from .runtime.hybrid_engine import DeepScaleHybridEngine
 from .runtime.pipe.engine import PipelineEngine
 from .inference.engine import InferenceEngine
-
+from .inference.config import DeepScaleInferenceConfig
 from .runtime.lr_schedules import add_tuning_arguments
 from .runtime.config import DeepScaleConfig, DeepScaleConfigError
 from .runtime.activation_checkpointing import checkpointing
 from .ops.transformer import DeepScaleTransformerLayer, DeepScaleTransformerConfig
 from .module_inject import replace_transformer_layer, revert_transformer_layer
 
-from .utils import log_dist
-from .utils.distributed import init_distributed
+from .utils import log_dist, OnDevice, logger
+from .comm.comm import init_distributed
 
 from .runtime import zero
+from .runtime.compiler import is_compile_supported
 
 from .pipe import PipelineModule
 
@@ -32,7 +51,7 @@ from .git_version_info import version, git_hash, git_branch
 
 
 def _parse_version(version_str):
-    """Parse a version string and extract the major, minor, and patch versions."""
+    '''Parse a version string and extract the major, minor, and patch versions.'''
     ver = pkg_version.parse(version_str)
     return ver.major, ver.minor, ver.micro
 
@@ -43,32 +62,23 @@ __version_major__, __version_minor__, __version_patch__ = _parse_version(__versi
 __git_hash__ = git_hash
 __git_branch__ = git_branch
 
-# Provide backwards compatability with old deepscale.pt module structure, should hopefully not be used
-pt = types.ModuleType("pt", "dummy pt module for backwards compatability")
-deepscale = sys.modules[__name__]
-setattr(deepscale, "pt", pt)
-setattr(deepscale.pt, "deepscale_utils", deepscale.runtime.utils)
-sys.modules["deepscale.pt"] = deepscale.pt
-sys.modules["deepscale.pt.deepscale_utils"] = deepscale.runtime.utils
-setattr(deepscale.pt, "deepscale_config", deepscale.runtime.config)
-sys.modules["deepscale.pt.deepscale_config"] = deepscale.runtime.config
-setattr(deepscale.pt, "loss_scaler", deepscale.runtime.fp16.loss_scaler)
-sys.modules["deepscale.pt.loss_scaler"] = deepscale.runtime.fp16.loss_scaler
+# Set to torch's distributed package or deepscale.comm based inside DeepScaleEngine init
+dist = None
 
 
-def initialize(
-    args=None,
-    model=None,
-    optimizer=None,
-    model_parameters=None,
-    training_data=None,
-    lr_scheduler=None,
-    mpu=None,
-    dist_init_required=None,
-    collate_fn=None,
-    config=None,
-    config_params=None,
-):
+def initialize(args=None,
+               model: torch.nn.Module = None,
+               optimizer: Optional[Union[Optimizer, DeepScaleOptimizerCallable]] = None,
+               model_parameters: Optional[torch.nn.Module] = None,
+               training_data: Optional[torch.utils.data.Dataset] = None,
+               lr_scheduler: Optional[Union[_LRScheduler, DeepScaleSchedulerCallable]] = None,
+               distributed_port: int = TORCH_DISTRIBUTED_DEFAULT_PORT,
+               mpu=None,
+               dist_init_required: Optional[bool] = None,
+               collate_fn=None,
+               config=None,
+               mesh_param=None,
+               config_params=None):
     """Initialize the DeepScale Engine.
 
     Arguments:
@@ -77,21 +87,23 @@ def initialize(
 
         model: Required: nn.module class before apply any wrappers
 
-        optimizer: Optional: a user defined optimizer, this is typically used instead of defining
-            an optimizer in the DeepScale json config.
+        optimizer: Optional: a user defined Optimizer or Callable that returns an Optimizer object.
+            This overrides any optimizer definition in the DeepScale json config.
 
         model_parameters: Optional: An iterable of torch.Tensors or dicts.
             Specifies what Tensors should be optimized.
 
         training_data: Optional: Dataset of type torch.utils.data.Dataset
 
-        lr_scheduler: Optional: Learning Rate Scheduler Object. It should define a get_lr(),
-            step(), state_dict(), and load_state_dict() methods
+        lr_scheduler: Optional: Learning Rate Scheduler Object or a Callable that takes an Optimizer and returns a Scheduler object.
+            The scheduler object should define a get_lr(), step(), state_dict(), and load_state_dict() methods
+
+        distributed_port: Optional: Master node (rank 0)'s free port that needs to be used for communication during distributed training
 
         mpu: Optional: A model parallelism unit object that implements
             get_{model,data}_parallel_{rank,group,world_size}()
 
-        dist_init_required: Optional: None will auto-initialize torch.distributed if needed,
+        dist_init_required: Optional: None will auto-initialize torch distributed if needed,
             otherwise the user can force it to be initialized or not via boolean.
 
         collate_fn: Optional: Merges a list of samples to form a
@@ -117,45 +129,97 @@ def initialize(
         * ``lr_scheduler``: Wrapped lr scheduler if user ``lr_scheduler`` is passed, or
           if ``lr_scheduler`` specified in JSON configuration. Otherwise ``None``.
     """
-    log_dist(
-        "DeepScale info: version={}, git-hash={}, git-branch={}".format(
-            __version__,
-            __git_hash__,
-            __git_branch__),
-        ranks=[0],
-    )
+    log_dist("DeepScale info: version={}, git-hash={}, git-branch={}".format(__version__, __git_hash__,
+                                                                             __git_branch__),
+             ranks=[0])
+
+    # Disable zero.Init context if it's currently enabled
+    zero.partition_parameters.shutdown_init_context()
 
     assert model is not None, "deepscale.initialize requires a model"
 
+    global dist
+    from deepscale import comm as dist
+    dist_backend = get_accelerator().communication_backend_name()
+    dist.init_distributed(dist_backend=dist_backend,
+                          distributed_port=distributed_port,
+                          dist_init_required=dist_init_required)
+
+    ##TODO: combine reuse mpu as mesh device and vice versa
+    # Set config using config_params for backwards compat
+    if config is None and config_params is not None:
+        config = config_params
+
+    mesh_device = None
+    if mesh_param:
+        logger.info(f"mesh_param to Initialize mesh device: {mesh_param}")
+        mesh_device = dist.initialize_mesh_device(mesh_param, ("data_parallel", "sequence_parallel"))
+    #if config file has sequence parallelize and data parallelize, then use them to initialize mesh device
+    elif config is not None:
+        if "sequence_parallel_size" in config and "data_parallel_size" in config:
+            logger.info(f"config to Initialize mesh device: {config}")
+            mesh_device = dist.initialize_mesh_device((config["data_parallel_size"], config["sequence_parallel_size"]), \
+            ("data_parallel", "sequence_parallel"))
+
+    # Check for deepscale_config for backwards compat
+    if hasattr(args, "deepscale_config") and args.deepscale_config is not None:
+        logger.warning("************ --deepscale_config is deprecated, please use --deepscale_config ************")
+        if hasattr(args, "deepscale_config"):
+            assert (args.deepscale_config is
+                    None), "Not sure how to proceed, we were given both a deepscale_config and deepscale_config"
+        args.deepscale_config = args.deepscale_config
+        args.deepscale_config = None
+
+    # Check that we have only one config passed
+    if hasattr(args, "deepscale_config") and args.deepscale_config is not None:
+        assert config is None, "Not sure how to proceed, we were given deepscale configs in the deepscale arguments and deepscale.initialize() function call"
+        config = args.deepscale_config
+    assert config is not None, "DeepScale requires --deepscale_config to specify configuration file"
     if not isinstance(model, PipelineModule):
-        engine = DeepScaleEngine(
-            args=args,
-            model=model,
-            optimizer=optimizer,
-            model_parameters=model_parameters,
-            training_data=training_data,
-            lr_scheduler=lr_scheduler,
-            mpu=mpu,
-            dist_init_required=dist_init_required,
-            collate_fn=collate_fn,
-            config=config,
-            config_params=config_params,
-        )
+        config_class = DeepScaleConfig(config, mpu, mesh_device=mesh_device)
+        if config_class.hybrid_engine.enabled:
+            engine = DeepScaleHybridEngine(args=args,
+                                           model=model,
+                                           optimizer=optimizer,
+                                           model_parameters=model_parameters,
+                                           training_data=training_data,
+                                           lr_scheduler=lr_scheduler,
+                                           mpu=mpu,
+                                           dist_init_required=dist_init_required,
+                                           collate_fn=collate_fn,
+                                           config=config,
+                                           config_class=config_class)
+        else:
+            engine = DeepScaleEngine(args=args,
+                                     model=model,
+                                     optimizer=optimizer,
+                                     model_parameters=model_parameters,
+                                     training_data=training_data,
+                                     lr_scheduler=lr_scheduler,
+                                     mpu=mpu,
+                                     dist_init_required=dist_init_required,
+                                     collate_fn=collate_fn,
+                                     config=config,
+                                     mesh_device=mesh_device,
+                                     config_class=config_class)
     else:
         assert mpu is None, "mpu must be None with pipeline parallelism"
-        engine = PipelineEngine(
-            args=args,
-            model=model,
-            optimizer=optimizer,
-            model_parameters=model_parameters,
-            training_data=training_data,
-            lr_scheduler=lr_scheduler,
-            mpu=model.mpu(),
-            dist_init_required=dist_init_required,
-            collate_fn=collate_fn,
-            config=config,
-            config_params=config_params,
-        )
+        mpu = model.mpu()
+        config_class = DeepScaleConfig(config, mpu)
+        engine = PipelineEngine(args=args,
+                                model=model,
+                                optimizer=optimizer,
+                                model_parameters=model_parameters,
+                                training_data=training_data,
+                                lr_scheduler=lr_scheduler,
+                                mpu=mpu,
+                                dist_init_required=dist_init_required,
+                                collate_fn=collate_fn,
+                                config=config,
+                                config_class=config_class)
+
+    # Restore zero.Init context if necessary
+    zero.partition_parameters.restore_init_context()
 
     return_items = [
         engine,
@@ -179,46 +243,24 @@ def _add_core_arguments(parser):
     Return:
         parser: Updated Parser
     """
-    group = parser.add_argument_group("DeepScale", "DeepScale configurations")
+    group = parser.add_argument_group('DeepScale', 'DeepScale configurations')
 
-    group.add_argument(
-        "--deepscale",
-        default=False,
-        action="store_true",
-        help=
-        "Enable DeepScale (helper flag for user code, no impact on DeepScale backend)",
-    )
+    group.add_argument('--deepscale',
+                       default=False,
+                       action='store_true',
+                       help='Enable DeepScale (helper flag for user code, no impact on DeepScale backend)')
 
-    group.add_argument(
-        "--deepscale_config",
-        default=None,
-        type=str,
-        help="DeepScale json configuration file.",
-    )
+    group.add_argument('--deepscale_config', default=None, type=str, help='DeepScale json configuration file.')
 
-    group.add_argument(
-        "--deepscale",
-        default=False,
-        action="store_true",
-        help=
-        "Deprecated enable DeepScale (helper flag for user code, no impact on DeepScale backend)",
-    )
+    group.add_argument('--deepscale',
+                       default=False,
+                       action='store_true',
+                       help='Deprecated enable DeepScale (helper flag for user code, no impact on DeepScale backend)')
 
-    group.add_argument(
-        "--deepscale_config",
-        default=None,
-        type=str,
-        help="Deprecated DeepScale json configuration file.",
-    )
-
-    group.add_argument(
-        "--deepscale_mpi",
-        default=False,
-        action="store_true",
-        help=
-        "Run via MPI, this will attempt to discover the necessary variables to initialize torch "
-        "distributed from the MPI environment",
-    )
+    group.add_argument('--deepscale_config',
+                       default=None,
+                       type=str,
+                       help='Deprecated DeepScale json configuration file.')
 
     return parser
 
@@ -239,70 +281,86 @@ def add_config_arguments(parser):
     return parser
 
 
-def init_inference(
-    model,
-    mp_size=1,
-    mpu=None,
-    checkpoint=None,
-    module_key="module",
-    dtype=None,
-    injection_policy=None,
-    replace_method="auto",
-    quantization_setting=None,
-):
+def default_inference_config():
+    """
+        Return a default DeepScale inference configuration dictionary.
+    """
+    return DeepScaleInferenceConfig().dict()
+
+
+def init_inference(model, config=None, **kwargs):
     """Initialize the DeepScale InferenceEngine.
 
+    Description: all four cases are valid and supported in DS init_inference() API.
+
+    # Case 1: user provides no config and no kwargs. Default config will be used.
+
+    .. code-block:: python
+
+        generator.model = deepscale.init_inference(generator.model)
+        string = generator("DeepScale is")
+        print(string)
+
+    # Case 2: user provides a config and no kwargs. User supplied config will be used.
+
+    .. code-block:: python
+
+        generator.model = deepscale.init_inference(generator.model, config=config)
+        string = generator("DeepScale is")
+        print(string)
+
+    # Case 3: user provides no config and uses keyword arguments (kwargs) only.
+
+    .. code-block:: python
+
+        generator.model = deepscale.init_inference(generator.model,
+                                                    tensor_parallel={"tp_size": world_size},
+                                                    dtype=torch.half,
+                                                    replace_with_kernel_inject=True)
+        string = generator("DeepScale is")
+        print(string)
+
+    # Case 4: user provides config and keyword arguments (kwargs). Both config and kwargs are merged and kwargs take precedence.
+
+    .. code-block:: python
+
+        generator.model = deepscale.init_inference(generator.model, config={"dtype": torch.half}, replace_with_kernel_inject=True)
+        string = generator("DeepScale is")
+        print(string)
+
     Arguments:
-        model: Required: nn.module class before apply any wrappers
+        model: Required: original nn.module object without any wrappers
 
-        mp_size: Optional: Desired model parallel size, default is 1 meaning no
-            model parallelism.
-
-        mpu: Optional: A model parallelism unit object that implements
-            get_{model,data}_parallel_{rank,group,world_size}()
-
-        checkpoint: Optional: Path to deepscale compatible checkpoint or path to
-            JSON with load policy.
-
-        dtype: Optional: Desired model data type, will convert model to this type.
-            Supported target types: torch.half, torch.int8, torch.float
-
-        injection_policy: Optional: Dictionary mapping a client nn.Module to its corresponding
-            injection policy. e.g., {BertLayer : deepscale.inference.HFBertLayerPolicy}
-
-        replace_method: Optional: If 'auto' DeepScale will automatically try and replace
-            model modules with its optimized versions. If an injection_policy is set this will
-            override the automatic replacement behavior.
-
-        quantization_setting: Optional: Quantization settings used for quantizing your model using the MoQ.
-            The setting can be one element or a tuple. If one value is passed in, we consider it as the number
-            of groups used in quantization. A tuple is passed in if we want to mention that there is extra-grouping
-            for the MLP part of a Transformer layer (e.g. (True, 8) shows we quantize the model using 8 groups for
-            all the network except the MLP part that we use 8 extra grouping).
+        config: Optional: instead of arguments, you can pass in a DS inference config dict or path to JSON file
 
     Returns:
         A deepscale.InferenceEngine wrapped model.
     """
-    log_dist(
-        "DeepScale info: version={}, git-hash={}, git-branch={}".format(
-            __version__,
-            __git_hash__,
-            __git_branch__),
-        ranks=[0],
-    )
+    log_dist("DeepScale info: version={}, git-hash={}, git-branch={}".format(__version__, __git_hash__,
+                                                                             __git_branch__),
+             ranks=[0])
 
-    if isinstance(model, PipelineModule):
-        raise NotImplementedError("pipeline module support is not implemented yet")
+    # Load config_dict from config first
+    if config is None:
+        config = {}
+    if isinstance(config, str):
+        with open(config, "r") as f:
+            config_dict = json.load(f)
+    elif isinstance(config, dict):
+        config_dict = config
     else:
-        engine = InferenceEngine(
-            model,
-            mp_size,
-            mpu,
-            checkpoint,
-            dtype,
-            injection_policy,
-            replace_method,
-            quantization_setting,
-        )
+        raise ValueError(f"'config' argument expected string or dictionary, got {type(config)}")
+
+    # Update with values from kwargs, ensuring no conflicting overlap between config and kwargs
+    overlap_keys = set(config_dict.keys()).intersection(kwargs.keys())
+    # If there is overlap, error out if values are different
+    for key in overlap_keys:
+        if config_dict[key] != kwargs[key]:
+            raise ValueError(f"Conflicting argument '{key}' in 'config':{config_dict[key]} and kwargs:{kwargs[key]}")
+    config_dict.update(kwargs)
+
+    ds_inference_config = DeepScaleInferenceConfig(**config_dict)
+
+    engine = InferenceEngine(model, config=ds_inference_config)
 
     return engine

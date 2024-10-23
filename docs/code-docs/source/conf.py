@@ -1,3 +1,8 @@
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+# DeepScale Team
+
 # Configuration file for the Sphinx documentation builder.
 #
 # This file only contains a selection of the most common options. For a full
@@ -15,16 +20,17 @@ import sys
 
 # -- Project information -----------------------------------------------------
 
-project = "DeepScale"
-copyright = "2020, Khulnasoft"
-author = "Khulnasoft"
+project = 'DeepScale'
+copyright = '2020, Microsoft'
+author = 'Microsoft'
 
 # The full version, including alpha/beta/rc tags
-release = "0.3.0"
+with open("../../../version.txt", "r") as f:
+    release = f.readline().rstrip()
 
-master_doc = "index"
+master_doc = 'index'
 
-autodoc_member_order = "bysource"
+autodoc_member_order = 'bysource'
 
 # -- General configuration ---------------------------------------------------
 
@@ -32,17 +38,32 @@ autodoc_member_order = "bysource"
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    "sphinx.ext.autodoc",
-    "sphinx.ext.napoleon",
-    "sphinx.ext.viewcode",
-    "recommonmark",
-    "sphinx_rtd_theme",
+    'sphinx.ext.autodoc',
+    'sphinx.ext.napoleon',
+    'sphinx.ext.viewcode',
+    'recommonmark',
+    'sphinx_rtd_theme',
+    'sphinxcontrib.autodoc_pydantic',
+    'sphinx.ext.autosectionlabel',
 ]
 
-pygments_style = "sphinx"
+pygments_style = 'sphinx'
+
+# autodoc_pyandtic config
+autodoc_pydantic_model_show_field_summary = False
+autodoc_pydantic_field_signature_prefix = ' '
+autodoc_pydantic_model_signature_prefix = 'class'
+autodoc_pydantic_model_show_json = False
+autodoc_pydantic_model_show_config_summary = False
+autodoc_pydantic_model_show_config_member = False
+autodoc_pydantic_model_show_validator_summary = False
+autodoc_pydantic_model_show_validator_members = False
+autodoc_pydantic_model_summary_list_order = 'bysource'
+autodoc_pydantic_model_member_order = 'bysource'
+autodoc_pydantic_field_list_validators = False
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ["_templates"]
+templates_path = ['_templates']
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -54,30 +75,27 @@ exclude_patterns = []
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = "sphinx_rtd_theme"
+html_theme = 'sphinx_rtd_theme'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ["_static"]
+html_static_path = ['_static']
 
 # GitHub integration
 html_context = {
     "display_github": True,
-    "github_user": "khulnasoft",
+    "github_user": "microsoft",
     "github_repo": "DeepScale",
     "github_version": "master",
     "conf_py_path": "/docs/code-docs/source/",
 }
 
-# Mock imports so we don't have to install torch to build the docs.
-from unittest.mock import MagicMock
-
-sys.path.insert(0, os.path.abspath("../../../"))
+sys.path.insert(0, os.path.abspath('../../../'))
 
 # Prepend module names to class descriptions?
 add_module_names = True
 
-autoclass_content = "both"
+autoclass_content = 'auto'
 
-autodoc_mock_imports = ["torch", "apex", "mpi4py", "tensorboardX", "numpy", "cupy"]
+autodoc_mock_imports = ["apex", "mpi4py", "tensorboardX", "numpy", "cupy"]

@@ -1,10 +1,8 @@
 ---
-layout: single
-title: "DeepScale Inference: Multi-GPU inference with customized inference kerenls and quantization support"
+title: "DeepScale Inference: Multi-GPU inference with customized inference kernels and quantization support"
 excerpt: ""
-categories: news
-new_post: false
 date: 2021-03-16 00:00:00
+tags: inference English
 ---
 While DeepScale supports training advanced large-scale models, using these trained models in the desired application scenarios is still challenging due to three major limitations in existing inference solutions: 1) lack of support for multi-GPU inference to fit large models and meet latency requirements, 2) limited GPU kernel performance when running inference with small batch sizes, and 3) difficulties in exploiting quantization, which includes both quantizing the model to reduce the model size and latency as well as supporting high-performance inference of quantized models without specialized hardware.
 
@@ -39,26 +37,26 @@ To fuse these operations, we exploit shared-memory as an intermediate cache for 
 
 ## Seamless pipeline from training to inference with automatic kernel-injection
 
-To run the model in Inference mode, DeepScale simply requires the location of the model checkpoints and the desired parallelism configuration, i.e., MP/PP degree. DeepScale Inference kernels can also be enabled for many well-known model architectures such as HuggingFace (Bert and GPT-2) or Megatron GPT-based models using a pre-defined policy map that maps the original parameters to the parameters in the inference kernels. For other transformer-based models, user can specify their own policy map. Note that DS-Inference can run independent of the training pipeline as long as it receives all model checkpoints, and the DeepScale Transformer kernels for inference can be injected into any Transformer model if the right mapping policy is defined. For more information on how to enable Transformer inference kernel as well as specifying parallelism, please refer to out [inference tutorial](https://www.deepscale.khulnasoft.com/tutorials/inference-tutorial/).
+To run the model in Inference mode, DeepScale simply requires the location of the model checkpoints and the desired parallelism configuration, i.e., MP/PP degree. DeepScale Inference kernels can also be enabled for many well-known model architectures such as HuggingFace (Bert and GPT-2) or Megatron GPT-based models using a pre-defined policy map that maps the original parameters to the parameters in the inference kernels. For other transformer-based models, user can specify their own policy map. Note that DS-Inference can run independent of the training pipeline as long as it receives all model checkpoints, and the DeepScale Transformer kernels for inference can be injected into any Transformer model if the right mapping policy is defined. For more information on how to enable Transformer inference kernel as well as specifying parallelism, please refer to out [inference tutorial](https://www.deepscale.ai/tutorials/inference-tutorial/).
 
 
 ## Flexible quantization support
 
 To further reduce the inference cost for large-scale models, we created the DeepScale Quantization Toolkit, supporting flexible quantize-aware training and high-performance kernels for quantized inference.
 
-For training, we introduce a novel approach called Mixture of Quantization (MoQ), which is inspired by mixed-precision training while seamlessly applying quantization. With MoQ, we can control the precision of the model by simulating the impact of quantization when updating the parameters at each step of training. Moreover, it supports flexible quantization policies and schedules—we find that by dynamically adjusting the number of quantization bits during training, the final quantized model provides higher accuracy under the same compression ratio. To adapt to different tasks, MoQ can also leverage the second order information of models to detect their sensitivity to precision and adjust the quantization schedule and target accordingly.  
+For training, we introduce a novel approach called Mixture of Quantization (MoQ), which is inspired by mixed-precision training while seamlessly applying quantization. With MoQ, we can control the precision of the model by simulating the impact of quantization when updating the parameters at each step of training. Moreover, it supports flexible quantization policies and schedules—we find that by dynamically adjusting the number of quantization bits during training, the final quantized model provides higher accuracy under the same compression ratio. To adapt to different tasks, MoQ can also leverage the second order information of models to detect their sensitivity to precision and adjust the quantization schedule and target accordingly.
 
 To maximize the performance gains from the quantization model, we provide inference kernels tailored for quantized models that reduce latency through optimizing data movement but do not require specialized hardware. Finally, our toolkit does not require any code changes on the client side, making it easy to use.
 
 ## Performance results
 
-Boosting throughput and reducing inference cost.  Figure 3 shows the inference throughput per GPU for the three model sizes corresponding to the three Transformer networks, GPT-2, Turing-NLG, and GPT-3. DeepScale Inference increases in per-GPU throughput by 2 to 4 times when using the same precision of FP16 as the baseline.  By enabling quantization, we boost throughput further. We reach a throughput improvement of 3x for GPT-2, 5x for Turing-NLG, and 3x for a model that is similar in characteristics and size to GPT-3, which directly translates to 3–5x inference cost reduction on serving these large models. In addition, we achieve these throughput and cost improvements without compromising latency as shown in Figure 5.  
+Boosting throughput and reducing inference cost.  Figure 3 shows the inference throughput per GPU for the three model sizes corresponding to the three Transformer networks, GPT-2, Turing-NLG, and GPT-3. DeepScale Inference increases in per-GPU throughput by 2 to 4 times when using the same precision of FP16 as the baseline.  By enabling quantization, we boost throughput further. We reach a throughput improvement of 3x for GPT-2, 5x for Turing-NLG, and 3x for a model that is similar in characteristics and size to GPT-3, which directly translates to 3–5x inference cost reduction on serving these large models. In addition, we achieve these throughput and cost improvements without compromising latency as shown in Figure 5.
 
 ![Inference-Throughput](/assets/images/inference-throughput.png){: .align-center}
 
 Figure 3: Inference throughput for different model sizes. DeepScale Inference achieves 3x to 5x higher throughput than baseline.
 
-One source of inference cost reduction is through reducing the number of GPUs for hosting large models as shown in Figure 4.  The optimized GPU resources comes from 1) using inference-adapted parallelism, allowing users to adjust the model and pipeline parallelism degree from the trained model checkpoints, and 2) shrinking model memory footprint by half with INT8 quantization.  As shown in this figure, we use 2x less GPUs to run inference for the 17B model size by adapting the parallelism.  Together with INT8 quantization through DeepScale MoQ, we use 4x and 2x fewer GPUs for 17B and 175B sizes respectively.  
+One source of inference cost reduction is through reducing the number of GPUs for hosting large models as shown in Figure 4.  The optimized GPU resources comes from 1) using inference-adapted parallelism, allowing users to adjust the model and pipeline parallelism degree from the trained model checkpoints, and 2) shrinking model memory footprint by half with INT8 quantization.  As shown in this figure, we use 2x less GPUs to run inference for the 17B model size by adapting the parallelism.  Together with INT8 quantization through DeepScale MoQ, we use 4x and 2x fewer GPUs for 17B and 175B sizes respectively.
 
 ![Inference-Throughput](/assets/images/gpu-numbers.png){: .align-center}
 

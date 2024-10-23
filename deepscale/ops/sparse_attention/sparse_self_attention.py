@@ -1,14 +1,12 @@
-"""
-Copyright 2024 The KhulnaSoft DeepScale Team
-"""
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+# DeepScale Team
 
 import torch.nn as nn
-from torch.nn.functional import *
 import torch
 from torch import distributed as dist
-from collections import namedtuple
-from deepscale.ops.sparse_attention import MatMul, Softmax, SparsityConfig
-import sys
+from deepscale.ops.sparse_attention import SparsityConfig
 
 
 class SparseSelfAttention(nn.Module):
@@ -18,17 +16,17 @@ class SparseSelfAttention(nn.Module):
 
     For usage example please see, TODO DeepScale Sparse Transformer Tutorial.
     """
+
     def __init__(
-        self,
-        # SparsityConfig parameters needs to be set accordingly
-        sparsity_config=SparsityConfig(num_heads=4),
-        key_padding_mask_mode="add",
-        attn_mask_mode="mul",
-        max_seq_length=2048,
-    ):
+            self,
+            # SparsityConfig parameters needs to be set accordingly
+            sparsity_config=SparsityConfig(num_heads=4),
+            key_padding_mask_mode='add',
+            attn_mask_mode='mul',
+            max_seq_length=2048):
         """Initialize the sparse self attention layer.
         Arguments:
-            sparsity_config: optional: this parameter determins sparsity pattern configuration; it is based on SparsityConfig class.
+            sparsity_config: optional: this parameter determines sparsity pattern configuration; it is based on SparsityConfig class.
             key_padding_mask_mode: optional: a string determining if key padding mask needs to be added, `add`, or be multiplied, `mul`.
             attn_mask_mode: optional: a string determining if attention mask needs to be added, `add`, or be multiplied, `mul`.
             max_seq_length: optional: the maximum sequence length this sparse attention module will be applied to; it controls the size of the master_layout.
@@ -55,45 +53,30 @@ class SparseSelfAttention(nn.Module):
             dist.broadcast(self.master_layout, src=0)
             self._need_layout_synchronization = False
 
-        if L % self.sparsity_config.block != 0:
+        if (L % self.sparsity_config.block != 0):
             raise ValueError(
-                f"Sequence Length, {L}, needs to be dividable by Block size {self.sparsity_config.block}!"
-            )
+                f'Sequence Length, {L}, needs to be dividable by Block size {self.sparsity_config.block}!')
 
         num_blocks = L // self.sparsity_config.block
-        return self.master_layout[
-            ..., :num_blocks, :num_blocks
-        ].cpu()  # layout needs to be a CPU tensor
+        return self.master_layout[..., :num_blocks, :num_blocks].cpu()  # layout needs to be a CPU tensor
 
     # add to cache
     def get_ops(self, H, L):
-        import sys
-
+        from deepscale.ops.sparse_attention.matmul import MatMul
+        from deepscale.ops.sparse_attention.softmax import Softmax
         if L not in SparseSelfAttention.ops:
             sparsity_layout = self.get_layout(L)
-            sparse_dot_sdd_nt = MatMul(
-                sparsity_layout,
-                self.sparsity_config.block,
-                "sdd",
-                trans_a=False,
-                trans_b=True,
-            )
+            sparse_dot_sdd_nt = MatMul(sparsity_layout, self.sparsity_config.block, 'sdd', trans_a=False, trans_b=True)
 
-            sparse_dot_dsd_nn = MatMul(
-                sparsity_layout,
-                self.sparsity_config.block,
-                "dsd",
-                trans_a=False,
-                trans_b=False,
-            )
+            sparse_dot_dsd_nn = MatMul(sparsity_layout,
+                                       self.sparsity_config.block,
+                                       'dsd',
+                                       trans_a=False,
+                                       trans_b=False)
 
             sparse_softmax = Softmax(sparsity_layout, self.sparsity_config.block)
 
-            SparseSelfAttention.ops[L] = (
-                sparse_dot_sdd_nt,
-                sparse_dot_dsd_nn,
-                sparse_softmax,
-            )
+            SparseSelfAttention.ops[L] = (sparse_dot_sdd_nt, sparse_dot_dsd_nn, sparse_softmax)
         return SparseSelfAttention.ops[L]
 
     def transpose_key_for_scores(self, x, L):
@@ -112,13 +95,7 @@ class SparseSelfAttention(nn.Module):
         return x.squeeze()
 
     # forward pass
-    def forward(self,
-                query,
-                key,
-                value,
-                rpe=None,
-                key_padding_mask=None,
-                attn_mask=None):
+    def forward(self, query, key, value, rpe=None, key_padding_mask=None, attn_mask=None):
         """Applies forward phase of sparse self attention
 
         Arguments:
@@ -132,8 +109,9 @@ class SparseSelfAttention(nn.Module):
             attn_mask_mode: optional: a boolean determining if attn_mask needs to be added or multiplied
 
         Return:
-             attn_output: a dense tensor containing attnetion context
+             attn_output: a dense tensor containing attention context
         """
+        assert query.dtype == torch.half, "sparse attention only supports training in fp16 currently, please file a github issue if you need fp32 support"
         bsz, num_heads, tgt_len, head_dim = query.size()
 
         # transpose back key if it is already transposed
@@ -141,36 +119,30 @@ class SparseSelfAttention(nn.Module):
 
         # check that operation is supported
         if query.shape != key.shape or key.shape != value.shape:
-            raise NotImplementedError("only self-attention is supported for now")
+            raise NotImplementedError('only self-attention is supported for now')
 
         # squeeze key_padding_mask if it is given
         if key_padding_mask is not None:
-            key_padding_mask = self.transpose_mask_for_sparse(query.dtype,
-                                                              key_padding_mask,
-                                                              is_key_padding_mask=True)
+            key_padding_mask = self.transpose_mask_for_sparse(query.dtype, key_padding_mask, is_key_padding_mask=True)
 
         # squeeze attn_mask if it is given
         if attn_mask is not None:
             attn_mask = self.transpose_mask_for_sparse(query.dtype, attn_mask)
 
         # cache look-up table computations etc
-        sparse_dot_sdd_nt, sparse_dot_dsd_nn, sparse_softmax = self.get_ops(
-            num_heads, tgt_len
-        )
+        sparse_dot_sdd_nt, sparse_dot_dsd_nn, sparse_softmax = self.get_ops(num_heads, tgt_len)
 
         scaling = float(head_dim)**-0.5
 
         # attention scores
         attn_output_weights = sparse_dot_sdd_nt(query, key)
-        attn_output_weights = sparse_softmax(
-            attn_output_weights,
-            scale=scaling,
-            rpe=rpe,
-            key_padding_mask=key_padding_mask,
-            attn_mask=attn_mask,
-            key_padding_mask_mode=self.key_padding_mask_mode,
-            attn_mask_mode=self.attn_mask_mode,
-        )
+        attn_output_weights = sparse_softmax(attn_output_weights,
+                                             scale=scaling,
+                                             rpe=rpe,
+                                             key_padding_mask=key_padding_mask,
+                                             attn_mask=attn_mask,
+                                             key_padding_mask_mode=self.key_padding_mask_mode,
+                                             attn_mask_mode=self.attn_mask_mode)
 
         # outputs
         attn_output = sparse_dot_dsd_nn(attn_output_weights, value)

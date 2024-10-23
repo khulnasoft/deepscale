@@ -1,6 +1,7 @@
 ---
 title: "Flops Profiler"
-excerpt: "Measure the parameters, latency, and floating point operations of your model"
+excerpt: "Measure the parameters, latency, and floating-point operations of your model"
+tags: profiling performance-tuning
 ---
 
 In this tutorial, we introduce the DeepScale Flops Profiler and provide examples of its usage.
@@ -12,7 +13,7 @@ In this tutorial, we introduce the DeepScale Flops Profiler and provide examples
 
 ## Overview
 
-Effective use of hardware resources is critical to good performance, but performance inefficiency in existing implementations for large-scale model training and inference are often hard to spot and attributed to specific module components. DeepScale Flops Profiler helps users easily measure both the model training/inference speed (latency, throughput) and efficiency (floating point operations per second, i.e., FLOPS) of a model and its submodules, with an eye towards eliminating inefficiencies in existing implementations.
+Effective use of hardware resources is critical to good performance, but performance inefficiency in existing implementations for large-scale model training and inference are often hard to spot and attribute to specific module components. DeepScale Flops Profiler helps users easily measure both the model training/inference speed (latency, throughput) and efficiency (floating-point operations per second, i.e., FLOPS) of a model and its submodules, with an eye towards eliminating inefficiencies in existing implementations.
 
 Below is an example output for BERT-Large(NVIDIA) on an A100 GPU with batch size `80`:
 
@@ -20,20 +21,20 @@ Below is an example output for BERT-Large(NVIDIA) on an A100 GPU with batch size
 -------------------------- DeepScale Flops Profiler --------------------------
 Profile Summary at step 10:
 Notations:
-data parallel size (dp_size), model paralel size(mp_size),
+data parallel size (dp_size), model parallel size(mp_size),
 number of parameters (params), number of multiply-accumulate operations(MACs),
-umber of floating point operations (flops), floating point operations per second (FLOPS),
+number of floating-point operations (flops), floating-point operations per second (FLOPS),
 fwd latency (forward propagation latency), bwd latency (backward propagation latency),
 step (weights update latency), iter latency (sum of fwd, bwd and step latency)
 
 world size:                                                   1
 data parallel size:                                           1
-model paralel size:                                           1
+model parallel size:                                          1
 batch size per GPU:                                           80
 params per gpu:                                               336.23 M
 params of model = params per GPU * mp_size:                   336.23 M
 fwd MACs per GPU:                                             3139.93 G
-fwd flops per GPU = 2 * fwd MACs per GPU:                     6279.86 G
+fwd flops per GPU:                                            6279.86 G
 fwd flops of model = fwd flops per GPU * mp_size:             6279.86 G
 fwd latency:                                                  76.67 ms
 bwd latency:                                                  108.02 ms
@@ -131,28 +132,29 @@ BertForPreTrainingPreLN(
 
 ```
 
-In the summary profile, the DeepScale Flops Profiler outputs the number of parameters, floating point operations (flops), FLOPS, latency, and throughput in samples/second of the model. This profile shows how much performance gap (compared to the peak hardware performance) the current model execution has and helps users tune the training or inference setup (e.g., hyperparameters, data parallelism, model parallelism, system configurations, etc.) for better performance.
+In the summary profile, the DeepScale Flops Profiler outputs the number of parameters, floating-point operations (flops), FLOPS, latency, and throughput in samples/second of the model. This profile shows how much performance gap (compared to the peak hardware performance) the current model execution has and helps users tune the training or inference setup (e.g., hyperparameters, data parallelism, model parallelism, system configurations, etc.) for better performance.
 
-The DeepScale Flops Profiler also measures significant modules at different model depths (aggregated profile) and module-specific profile in the model architecture (detailed profile). Using these profiles DeepScale users can understand how each layer or submodule contributes to the overall model complexity/performance. Then users can adjust or refactor the model design to achieve better performance. For example, using the profiler, DeepScale users can quantitatively tell if stacking smaller layers is lighter or more performant than having bigger ones. The aggregated and detailed profiles also allow users to quickly identify bottleneck modules. In the BERT-Large example above, using the DeepScale Flops Profiler, we find that BertLayer is the most significant layer and contains quite a few dropout, softmax, and layer norm along with linear modules. These modules are not heavy in flops and would trigger many GPU kernel invocations and create excessive read/write requests to memory. The pattern shown in the detailed profile suggests this is a perfect match for kernel fusion, and we developed fused transformer-kernels to reduce data movement (See DeepScaleBert). After applying our optimizations, we see a 25% improvement in FLOPS per GPU and overall training samples/second in the DeepScale Flops Profiler output.
+The DeepScale Flops Profiler also measures significant modules at different model depths (aggregated profile) and module-specific profile in the model architecture (detailed profile). Using these profiles, DeepScale users can understand how each layer or submodule contributes to the overall model complexity/performance. Then users can adjust or refactor the model design to improve performance. For example, using the profiler, DeepScale users can quantitatively tell if stacking smaller layers is lighter or more performant than having bigger ones. The aggregated and detailed profiles also allow users to quickly identify bottleneck modules. In the BERT-Large example above, using the DeepScale Flops Profiler, we find that BertLayer is the most significant layer and contains quite a few dropout, softmax, and layer norm along with linear modules. These modules are not heavy in flops and would trigger many GPU kernel invocations and create excessive read/write requests to memory. The pattern shown in the detailed profile suggests this is a perfect match for kernel fusion, and we developed fused transformer-kernels to reduce data movement (see [DeepScaleBert](/tutorials/bert-pretraining)). After applying our optimizations, we see a 25% improvement in FLOPS per GPU and overall training samples/second in the DeepScale Flops Profiler output.
 
-The DeepScale Flops Profiler can be used with the DeepScale runtime without any user code change or be used independently from DeepScale as a standalone package. When using DeepScale for model training, the profiler can be enabled in the DeepScale configuration file. As a standalone package, the profiler API can be used in both training and inference code. The DeepScale profiler is still under active development and includes just initial features.  Stay connected for more exciting features to be added soon.
+The DeepScale Flops Profiler can be used with the DeepScale runtime without any user code change or be used independently from DeepScale as a standalone package. When using DeepScale for model training, the profiler can be enabled in the DeepScale [configuration file](/docs/config-json/#flops-profiler). As a standalone package, the profiler API can be used in both training and inference code. The DeepScale profiler is still under active development and includes just initial features.  Stay connected for more exciting features to be added soon.
 
 ## Flops Measurement
 
-Similar to exsiting flops calculation tools or methods, the DeepScale Flops Profiler measures the flops of the forward pass of a module and the flops of the backward pass is estimated as `2` times of that of the forward pass.
-Different from the PyTorch profiler which calculates the flops of PyTorch operators, the DeepScale Flops Profiler measures the flops witin modules in a model and provides more insights to the users about the model execution.
+Similar to existing flops calculation tools or methods, the DeepScale Flops Profiler measures the flops of the forward pass of a module and the flops of the backward pass is estimated as `2` times of that of the forward pass.
+Different from the PyTorch profiler which calculates the flops of PyTorch operators, the DeepScale Flops Profiler measures the flops within modules in a model and provides more insights to the users about the model execution.
 The flops estimation is partly inspired by [ptflops](https://github.com/sovrasov/flops-counter.pytorch) with the major difference being that the DeepScale Flops Profiler not only supports flops computation directly at module level, but can also capture ```torch.nn.functional``` invoked in a module to estimate the flops.
-Thus the DeepScale Flops Profiler allows for customized modules in the model, e.g., ```ParallelTransformerLayerworks, ParallelSelfAttention, RowParallelLinear, etc.``` in [Megatron-LM](https://github.com/NVIDIA/Megatron-LM). This is in contrast to ptflops which requires users to write customized flops calculation functions for each customized module.
+Thus the DeepScale Flops Profiler allows for customized modules in the model, e.g., `ParallelTransformerLayerworks`, `ParallelSelfAttention`, `RowParallelLinear`, etc. in [Megatron-LM](https://github.com/NVIDIA/Megatron-LM). This is in contrast to ptflops which requires users to write customized flops calculation functions for each customized module.
 
 ## Multi-GPU, Multi-node, Data Parallelism, and Model Parallelism
 
-The DeepScale Flops Profiler outputs the per GPU profile as well as the world size, data parallel size, and model paralel size.                                           1
-For models running on multi-GPU or multi-node, only change of the model parallelism (e.g. ```--model-parallel-size``` in [Megatron-LM](https://github.com/NVIDIA/Megatron-LM)) affects the number of flops and parameters profiled, i.e.,
+The DeepScale Flops Profiler outputs the per GPU profile as well as the world size, data parallel size, and model parallel size.
+
+For models running on multi-GPU or multi-node, only change of the model parallelism (e.g., `--model-parallel-size` in [Megatron-LM](https://github.com/NVIDIA/Megatron-LM)) affects the number of flops and parameters profiled, i.e.,
 `model_parallel_size * flops = total_flops` and `model_parallel_size * parameters = total_parameters`. The data parallel size or world size (related to the number of GPUs or nodes) does not affect the per GPU profile.
 
 ## Usage
 
-The DeepScale Flops Profiler can be used with the DeepScale runtime or as a standalone package. When using DeepScale for model training, the profiler can be configured in the deepscale configuration file without user code change. To use the flops profiler outside of the DeepScale runtime, one can simply install DeepScale and import the flops_profiler package to use the APIs directly. Examples of each usage are given below.
+The DeepScale Flops Profiler can be used with the DeepScale runtime or as a standalone package. When using DeepScale for model training, the profiler can be configured in the deepscale [configuration file](/docs/config-json/#flops-profiler) without user code changes. To use the flops profiler outside the DeepScale runtime, install DeepScale and import the `flops_profiler` package to use the APIs directly. Examples of each usage are given below.
 
   - [Usage With the DeepScale Runtime](#usage-with-the-deepscale-runtime)
     - [Example: Megatron-LM](#example-megatron-lm)
@@ -162,9 +164,10 @@ The DeepScale Flops Profiler can be used with the DeepScale runtime or as a stan
       - [Example: Bert](#example-bert)
     - [In Model Training Workflow](#in-model-training-workflow)
       - [Example Training Workflow](#example-training-workflow)
+
 ### Usage With the DeepScale Runtime
 
-When using DeepScale for model training, the profiler can be configured in the deepscale configuration file. No explict API calls are needed to use the profiler. The profiler can be enabled by adding the following field to the `deepscale_config` json file. Refer to [flops profiler](https://www.deepscale.khulnasoft.com/docs/config-json/#flops-profiler) for details.
+When using DeepScale for model training, the profiler can be configured in the deepscale [configuration file](/docs/config-json/#flops-profiler). No explicit API calls are needed to use the profiler. The profiler can be enabled by adding the following field to deepscale's configuration json file. Refer to [flops profiler](/docs/config-json/#flops-profiler) for details.
 
 ```json
 {
@@ -181,7 +184,7 @@ When using DeepScale for model training, the profiler can be configured in the d
 
 #### Example: Megatron-LM
 
-For information on running Megatron-LM with DeepScale, please refer to our tutorial [Megatron-LM](https://github.com/khulnasoft-lab/DeepScaleExamples/tree/master/Megatron-LM).
+For information on running Megatron-LM with DeepScale, please refer to our tutorial [Megatron-LM](https://github.com/khulnasoft/DeepScaleExamples/tree/master/megatron/Megatron-LM).
 
 An example output of 12-layer Megatron-LM model (`hidden_size = 8192, num_attention_heads = 32, batch_size = 1024, seq_length = 1024`) is shown below.
 
@@ -189,20 +192,20 @@ An example output of 12-layer Megatron-LM model (`hidden_size = 8192, num_attent
 -------------------------- DeepScale Flops Profiler --------------------------
 Profile Summary at step 10:
 Notations:
-data parallel size (dp_size), model paralel size(mp_size),
+data parallel size (dp_size), model parallel size(mp_size),
 number of parameters (params), number of multiply-accumulate operations(MACs),
-umber of floating point operations (flops), floating point operations per second (FLOPS),
+number of floating-point operations (flops), floating-point operations per second (FLOPS),
 fwd latency (forward propagation latency), bwd latency (backward propagation latency),
 step (weights update latency), iter latency (sum of fwd, bwd and step latency)
 
 world size:                                                   1
 data parallel size:                                           1
-model paralel size:                                           1
+model parallel size:                                          1
 batch size per GPU:                                           1024
 params per gpu:                                               1.29 M
 params of model = params per GPU * mp_size:                   1.29 M
 fwd MACs per GPU:                                             41271.95 G
-fwd flops per GPU = 2 * fwd MACs per GPU:                     82543.9 G
+fwd flops per GPU:                                            82543.9 G
 fwd flops of model = fwd flops per GPU * mp_size:             82543.9 G
 fwd latency:                                                  1.89 s
 bwd latency:                                                  5.38 s
@@ -245,7 +248,7 @@ Each module profile is listed after its name in the following order:
 params, percentage of total params, MACs, percentage of total MACs, fwd latency, percentage of total fwd latency, fwd FLOPS
 
 Note: 1. A module can have torch.nn.module or torch.nn.functional to compute logits (e.g. CrossEntropyLoss). They are not counted as submodules, thus not to be printed out. However they make up the difference between a parent's MACs(or latency) and the sum of its submodules'.
-1. Number of floating point operations is a theoretical estimation, thus FLOPS computed using that could be larger than the maximum system throughput.
+1. Number of floating-point operations is a theoretical estimation, thus FLOPS computed using that could be larger than the maximum system throughput.
 2. The fwd latency listed in the top module's profile is directly captured at the module forward function in PyTorch, thus it's less than the fwd latency shown above which is captured in DeepScale.
 
 GPT2Model(
@@ -298,7 +301,7 @@ GPT2Model(
 
 The profiler can be used as a standalone package outside of the DeepScale runtime.
 One can simply install DeepScale and import the `flops_profiler` package to use the APIs directly.
-Refer to [installation of DeepScale](https://www.deepscale.khulnasoft.com/getting-started/#installation) for installing DeepScale.
+Refer to [installation of DeepScale](https://www.deepscale.ai/getting-started/#installation) for installing DeepScale.
 
 #### In Model Inference
 
@@ -313,21 +316,23 @@ The following example shows how to profile AlexNet using the DeepScale flops pro
 import torchvision.models as models
 import torch
 from deepscale.profiling.flops_profiler import get_model_profile
+from deepscale.accelerator import get_accelerator
 
-with torch.cuda.device(0):
+with get_accelerator().device(0):
     model = models.alexnet()
     batch_size = 256
-    macs, params = get_model_profile(model=model, # model
-                                     input_res=(batch_size, 3, 224, 224), # input shape or input to the input_constructor
-                                     input_constructor=None, # if specified, a constructor taking input_res is used as input to the model
-                                     print_profile=True, # prints the model graph with the measured profile attached to each module
-                                     detailed=True, # print the detailed profile
-                                     module_depth=-1, # depth into the nested modules with -1 being the inner most modules
-                                     top_modules=3, # the number of top modules to print aggregated profile
-                                     warm_up=10, # the number of warm-ups before measuring the time of each module
-                                     as_string=True, # print raw numbers (e.g. 1000) or as human-readable strings (e.g. 1k)
-                                     output_file=None, # path to the output file. If None, the profiler prints to stdout.
-                                     ignore_modules=None) # the list of modules to ignore in the profiling
+    flops, macs, params = get_model_profile(model=model, # model
+                                    input_shape=(batch_size, 3, 224, 224), # input shape to the model. If specified, the model takes a tensor with this shape as the only positional argument.
+                                    args=None, # list of positional arguments to the model.
+                                    kwargs=None, # dictionary of keyword arguments to the model.
+                                    print_profile=True, # prints the model graph with the measured profile attached to each module
+                                    detailed=True, # print the detailed profile
+                                    module_depth=-1, # depth into the nested modules, with -1 being the inner most modules
+                                    top_modules=1, # the number of top modules to print aggregated profile
+                                    warm_up=10, # the number of warm-ups before measuring the time of each module
+                                    as_string=True, # print raw numbers (e.g. 1000) or as human-readable strings (e.g. 1k)
+                                    output_file=None, # path to the output file. If None, the profiler prints to stdout.
+                                    ignore_modules=None) # the list of modules to ignore in the profiling
 ```
 
 ##### Example: Bert
@@ -337,34 +342,33 @@ from functools import partial
 import torch
 from transformers import BertForSequenceClassification, BertTokenizer
 from deepscale.profiling.flops_profiler import get_model_profile
+from deepscale.accelerator import get_accelerator
 
 
-def bert_input_constructor(input_shape, tokenizer):
+def bert_input_constructor(batch_size, seq_len, tokenizer):
     fake_seq = ""
-    for _ in range(input_shape[1] - 2):  # ignore the two special tokens [CLS] and [SEP]
+    for _ in range(seq_len - 2):  # ignore the two special tokens [CLS] and [SEP]
       fake_seq += tokenizer.pad_token
-    inputs = tokenizer([fake_seq] * input_shape[0],
+    inputs = tokenizer([fake_seq] * batch_size,
                        padding=True,
                        truncation=True,
                        return_tensors="pt")
-    labels = torch.tensor([1] * input_shape[0])
+    labels = torch.tensor([1] * batch_size)
     inputs = dict(inputs)
     inputs.update({"labels": labels})
     return inputs
 
 
-with torch.cuda.device(0):
+with get_accelerator().device(0):
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
     model = BertForSequenceClassification.from_pretrained('bert-base-uncased')
     batch_size = 4
     seq_len = 128
     enable_profile = True
     if enable_profile:
-      macs, params = get_model_profile(
+      flops, macs, params = get_model_profile(
           model,
-          (batch_size, seq_len),
-          input_constructor=partial(bert_input_constructor,
-                                    tokenizer=tokenizer),
+          kwargs=bert_input_constructor(batch_size, seq_len, tokenizer),
           print_profile=True,
           detailed=True,
       )
@@ -376,9 +380,10 @@ with torch.cuda.device(0):
 #### In Model Training Workflow
 
 To profile model forward in a training workflow, use the `FlopsProfiler`class.
-The `FlopsProfiler`class provides the follwing methods:
+The `FlopsProfiler`class provides the following methods:
   * `start_profile()` - starts profiling
-  * `get_total_flops(as_string=False)` - returns the total number of MACs in the model
+  * `get_total_flops(as_string=False)` - returns the total number of floating-point operations in the model
+  * `get_total_macs(as_string=False)` - returns the total number of MACs in the model
   * `get_total_params(as_string=False)` - returns the total number of parameters in the model
   * `print_model_profile(profile_step=1, module_depth=-1, top_modules=3, detailed=True, output_file=None)` - prints the model profile
   * `stop_profile()` - stops profiling. This stops the flops counting in the model.
@@ -408,8 +413,9 @@ for step, batch in enumerate(data_loader):
   # end profiling and print output
   if step == profile_step: # if using multi nodes, check global_rank == 0 as well
     prof.stop_profile()
-    flops = prof.get_total_flops(as_string=True)
-    params = prof.get_total_params(as_string=True)
+    flops = prof.get_total_flops()
+    macs = prof.get_total_macs()
+    params = prof.get_total_params()
     if print_profile:
         prof.print_model_profile(profile_step=profile_step)
     prof.end_profile()

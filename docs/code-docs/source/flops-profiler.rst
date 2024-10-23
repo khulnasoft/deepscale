@@ -6,7 +6,7 @@ The flops profiler in DeepScale profiles the forward pass of a model and measure
 
 When using DeepScale for model training, the flops profiler can be configured in the deepscale_config file without user code changes. To use the flops profiler outside of the DeepScale runtime, one can simply install DeepScale and import the flops_profiler package to use the APIs directly.
 
-Please see the `Flops Profiler tutorial <https://www.deepscale.khulnasoft.com/tutorials/flops-profiler/>`_ for usage details.
+Please see the `Flops Profiler tutorial <https://www.deepscale.ai/tutorials/flops-profiler/>`_ for usage details.
 
 Flops Profiler
 ---------------------------------------------------

@@ -1,6 +1,7 @@
-/*
-Copyright 2024 The KhulnaSoft DeepScale Team
-*/
+// Copyright (c) Microsoft Corporation.
+// SPDX-License-Identifier: Apache-2.0
+
+// DeepScale Team
 
 #include <cassert>
 #include "custom_cuda_layers.h"
@@ -14,8 +15,8 @@ constexpr int granularity = 16;
 constexpr int mem_vals = granularity / sizeof(int32_t);
 constexpr int max_buffer_size = (threads + 1) * mem_vals;
 
-#ifdef __HIP_PLATFORM_HCC__
-constexpr int warp_size = 64;
+#ifdef __HIP_PLATFORM_AMD__
+constexpr int warp_size = ROCM_WAVEFRONT_SIZE;
 #else
 constexpr int warp_size = 32;
 #endif

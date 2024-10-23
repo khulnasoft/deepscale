@@ -1,9 +1,7 @@
 ---
-layout: single
-title: "DeepScale Khulnasoft Research Webinar is now on-demand"
+title: "DeepScale Microsoft Research Webinar is now on-demand"
 excerpt: ""
-categories: news
-link: https://note.khulnasoft.com/MSR-Webinar-DeepScale-Registration-On-Demand.html
-new_post: true
+tags: presentations English
+link: https://note.microsoft.com/MSR-Webinar-DeepScale-Registration-On-Demand.html
 date: 2020-08-07 00:00:00
 ---

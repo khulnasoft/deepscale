@@ -1,6 +1,12 @@
 ---
 title: "1-bit Adam: Up to 5x less communication volume and up to 3.4x faster training"
+tags: training IO
+toc: false
 ---
+
+**Note:**
+On 03/07/2022 we released 0/1 Adam, which is a new communication-efficient Adam optimizer partially following the 1-bit Adam's design. Compared to the 1-bit Adam described below, 0/1 Adam provides better communication efficiency and the same final model quality on different tasks including BERT, GPT-2, and ImageNet. Thus we would recommend to first try 0/1 Adam ([tutorial](/tutorials/zero-one-adam/)), and then try 1-bit Adam if 0/1 Adam couldn't provide baseline Adam's convergence in your task.
+{: .notice--info}
 
 **Note:**
 This tutorial is updated on 03/04/2021 to reflect the 1-bit Adam v2. Changes include: 1) NCCL-based implementation which provides better performance and usability compared to the MPI-based implementation. 2) Add support to momentum masks for those parameters with constant zero gradients during training. 3) Bug fixes. See details below.
@@ -10,7 +16,7 @@ This tutorial is updated on 03/04/2021 to reflect the 1-bit Adam v2. Changes inc
 1) The NCCL-based implementation requires PyTorch >= 1.8 (and NCCL >= 2.8.3 when you have 64 or more GPUs). See details below. 2) Although 1-bit Adam is compatible with both FP16 and FP32, currently we only verified the convergence under mixed precision/FP16 training. 3) Currently the MPI-based implementation is not compatible with pipeline parallelism. 4) Frequent checkpoint loading could hurt 1-bit Adam's convergence. See details below.
 {: .notice--warning}
 
-In this tutorial, we are going to introduce the 1-bit Adam optimizer in DeepScale. 1-bit Adam can improve model training speed on communication-constrained clusters, especially for communication-intensive large models by reducing the overall communication volume by up to 5x. Detailed description of the 1-bit Adam algorithm, its implementation in DeepScale, and performance evaluation is available from our [blog post](https://www.deepscale.khulnasoft.com/news/2020/09/08/onebit-adam-blog-post.html). We also have a [paper](https://arxiv.org/abs/2102.02888) which provides the most complete details including algorithm, system implementation, theoretical analysis, and more evaluations.
+In this tutorial, we are going to introduce the 1-bit Adam optimizer in DeepScale. 1-bit Adam can improve model training speed on communication-constrained clusters, especially for communication-intensive large models by reducing the overall communication volume by up to 5x. Detailed description of the 1-bit Adam algorithm, its implementation in DeepScale, and performance evaluation is available from our [blog post](https://www.deepscale.ai/2020/09/08/onebit-adam-blog-post.html). We also have a [paper](https://arxiv.org/abs/2102.02888) which provides the most complete details including algorithm, system implementation, theoretical analysis, and more evaluations.
 
 To illustrate the benefits and usage of 1-bit Adam optimizer in DeepScale, we use the following two training tasks as examples:
 
@@ -40,7 +46,7 @@ cd DeepScaleExamples/
 In 1-bit Adam v2, we introduce a new system implementation for compressed communication using the NCCL backend of PyTorch distributed. This significantly improves the usability due to NCCL’s integration with PyTorch distributed. The performance of our new NCCL-based implementation is also better than our earlier MPI-based implementation for Ethernet-based systems and on-par for InfiniBand-based systems. Thus we highly recommend users to choose this implementation.
 
 **Watch out!**
-This NCCL-based implementation requires PyTorch >= 1.8. It also requires NCCL >= 2.8.3 when you have 64 or more GPUs to avoid certain NCCL runtime bugs. Currently (2021/03/16) NCCL 2.8.3 is not officially supported by PyTorch. The solution we used is by hacking in NCCL 2.8.3 via `LD_PRELOAD`: 1) Install NCCL 2.8.3. This works for us on a CUDA 11 system: `apt-get install -y libnccl2=2.8.3-1+cuda11.0 libnccl-dev=2.8.3-1+cuda11.0`. 2) Set `LD_PRELOAD` to the the library path. This works for us: `LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libnccl.so.2.8.3`. To confirm `LD_PRELOAD` is working you can see the version it uses in the NCCL logs if you have `NCCL_DEBUG=INFO`, it should say: NCCL version 2.8.3+cuda11.0.
+This NCCL-based implementation requires PyTorch >= 1.8. It also requires NCCL >= 2.8.3 when you have 64 or more GPUs to avoid certain NCCL runtime bugs. Currently (2021/03/16) NCCL 2.8.3 is not officially supported by PyTorch. The solution we used is by hacking in NCCL 2.8.3 via `LD_PRELOAD`: 1) Install NCCL 2.8.3. This works for us on a CUDA 11 system: `apt-get install -y libnccl2=2.8.3-1+cuda11.0 libnccl-dev=2.8.3-1+cuda11.0`. 2) Set `LD_PRELOAD` to the library path. This works for us: `LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libnccl.so.2.8.3`. To confirm `LD_PRELOAD` is working you can see the version it uses in the NCCL logs if you have `NCCL_DEBUG=INFO`, it should say: NCCL version 2.8.3+cuda11.0.
 {: .notice--warning}
 
 #### 1.2.2 MPI-based implementation
@@ -69,9 +75,15 @@ Alternatively, the standard mpirun launcher can also be used as follows:
 mpirun -np [#processes] -ppn [#GPUs on each node] -hostfile [hostfile] [MPI flags] python [training_script.py]
 ```
 
+#### 1.2.3 Compressed implementation
+
+This backend provides an approach to abstract the generic part of one-bit optimizers and implements accelerator dependent part with DeepScale custom op builder. To use this `CompressedBackend`, you should make sure that your current accelerator supports `PackbitsBuilder`, so that it could be loaded to do high performance packing and unpacking between float and Byte datatype, which is utilized in one-bit algorithm. An example can be found in `Deepscale/op_builder/xpu/packbits.py`.
+
+This approach does not require NCCL or MPI based communication library. It will automatically use your default communication library selected by your accelerator in `deepscale/comm`.
+
 ### 1.3 1-bit Algorithm
 
-The detailed description of the 1-bit Algorithm can be seen from our [blog post](https://www.deepscale.khulnasoft.com/news/2020/09/09/onebit-adam-blog-post.html) and our [paper](https://arxiv.org/abs/2102.02888).
+The detailed description of the 1-bit Algorithm can be seen from our [blog post](https://www.deepscale.ai/2020/09/08/onebit-adam-blog-post.html) and our [paper](https://arxiv.org/abs/2102.02888).
 
 ### 1.4 Configuration of 1-bit Adam
 The 1-bit Adam feature can be used by setting the optimizer configuration options as follows. An example json config file is shown below.
@@ -100,10 +112,10 @@ Please note three new parameters `freeze_step`, `cuda_aware`, and `comm_backend_
 
 `cuda_aware` is used for MPI-based implementation to indicate that the underlying MPI library supports CUDA-Aware communication. This feature is only supported on systems with InfiniBand interconnect and a CUDA-Aware MPI library like [MVAPICH2-GDR](http://mvapich.cse.ohio-state.edu/userguide/gdr/) or OpenMPI built with CUDA-Aware support. Setting `cuda_aware` to False will allow training on Ethernet based systems. However, the communication will happen using sender as well as receiver side memory copies between CPU and GPU buffers before and after communication.
 
-(New in v2) `comm_backend_name` is used to indicate which backend implementation to use. You can choose between NCCL and MPI-based implementations by setting `comm_backend_name` to "nccl" and "mpi". When using NCCL-based implementation, there is no need to set `cuda_aware`.
+(New in v2) `comm_backend_name` is used to indicate which backend implementation to use. You can choose between NCCL, MPI-based and compressed implementations by setting `comm_backend_name` to "nccl", "mpi" or "compressed". When using NCCL-based implementation, there is no need to set `cuda_aware`.
 
 #### 1.4.1 (New in v2) Momentum masks for parameters with constant zero gradients
-Because 1-bit compression cannot represent exact zero, the compression error would keep accumulating in the momentum if a parameter have constant zero gradients during training. For example, for BERT pre-training seq length 128, `bert.embeddings.position_embeddings.weight` has constant zeros in its gradient and momentum for row 129 to 512, because it only learns up to seq length 128 while the model supports up to seq length 512. Thus in 1-bit Adam v2 we added support of a momentum mask for users to specify those params that have constant exact zeros in their gradients. See [example script](https://github.com/khulnasoft-lab/DeepScaleExamples/blob/master/bing_bert/deepscale_train.py) for how to configure this momentum mask. One thing to note is that we don't use momentum mask saved in checkpoints since this mask could change during training (e.g., BERT seqlen 128 and 512 require different masks). So you have to provide this mask every time in your training script.
+Because 1-bit compression cannot represent exact zero, the compression error would keep accumulating in the momentum if a parameter have constant zero gradients during training. For example, for BERT pre-training seq length 128, `bert.embeddings.position_embeddings.weight` has constant zeros in its gradient and momentum for row 129 to 512, because it only learns up to seq length 128 while the model supports up to seq length 512. Thus in 1-bit Adam v2 we added support of a momentum mask for users to specify those params that have constant exact zeros in their gradients. See [example script](https://github.com/khulnasoft/DeepScaleExamples/blob/master/bing_bert/deepscale_train.py) for how to configure this momentum mask. One thing to note is that we don't use momentum mask saved in checkpoints since this mask could change during training (e.g., BERT seqlen 128 and 512 require different masks). So you have to provide this mask every time in your training script.
 
 **Watch out!**
 1-bit Adam relies on an compression error compensation mechanism to maintain the convergence speed at compression stage. When loading checkpoints, we actually reset the compression errors for 3 reasons: 1) The worker and server error at each GPU are distinct, so in current implementation only rank 0's errors are saved in the checkpoint. Thus we have to reset the errors. If we want to save them correctly we need O(num_gpu*model_size) memory in order to gather all the error, which is a very large memory requirement. It's possible to save them in a distributed way, but it will make the checkpoint saving/loading much more complicated. 2) Even if we are able to save the compression errors correctly, you need to have the exact same number of GPUs in order to load them correctly. 3) We verified on BERT pre-training that occasionally resetting the compression error at checkpoint loading does not affect the convergence. However, please avoid frequent checkpoint loading which could break the error compensation mechanism thus affect the convergence.
@@ -124,7 +136,7 @@ You can also use a pre-trained BERT model checkpoint from either DeepScale, [Hug
 
 ### 2.1 Running BingBertSQuAD with DeepScale and 1-bit Adam
 
-We provide example scripts under [DeepScaleExamples/BingBertSquad/1-bit_adam/](https://github.com/khulnasoft-lab/DeepScaleExamples/tree/master/BingBertSquad/1-bit_adam). There are 3 sets of scripts corresponding to NCCL-based implementation, MPI-based implementation on Ethernet systems, and MPI-based implementation on InfiniBand systems. For MPI-based implementation, we provide both example scripts when launching with deepscale or mpirun.
+We provide example scripts under [DeepScaleExamples/BingBertSquad/1-bit_adam/](https://github.com/khulnasoft/DeepScaleExamples/tree/master/BingBertSquad/1-bit_adam). There are 3 sets of scripts corresponding to NCCL-based implementation, MPI-based implementation on Ethernet systems, and MPI-based implementation on InfiniBand systems. For MPI-based implementation, we provide both example scripts when launching with deepscale or mpirun.
 
 <!-- The main part of training is done in `nvidia_run_squad_deepscale.py`, which has
 already been modified to use DeepScale. The `run_squad_deepscale.sh` script
@@ -209,7 +221,7 @@ We fixed the learning rate to 3e-5. The table below shows the F1 and the EM scor
 
 Figure 1: Scalability of 1-bit Adam for SQuAD Finetuning on V100 GPUs with batch size of 3/GPU. -->
 
-Performance results of SQuAD Fine-tuning can be seen from our [blog post](https://www.deepscale.khulnasoft.com/news/2020/09/09/onebit-adam-blog-post.html) and our [paper](https://arxiv.org/abs/2102.02888).
+Performance results of SQuAD Fine-tuning can be seen from our [blog post](https://www.deepscale.ai/2020/09/08/onebit-adam-blog-post.html) and our [paper](https://arxiv.org/abs/2102.02888).
 
 
 
@@ -218,7 +230,7 @@ For data downloading and pre-processing, please refer to the [BERT Pre-training]
 
 ### 3.1 Running Pre-training with DeepScale and 1-bit Adam
 
-We provide example scripts under [DeepScaleExamples/bing_bert/1-bit_adam/](https://github.com/khulnasoft-lab/DeepScaleExamples/tree/master/bing_bert/1-bit_adam). There are 3 sets of scripts corresponding to NCCL-based implementation, MPI-based implementation on Ethernet systems, and MPI-based implementation on InfiniBand systems. For MPI-based implementation, we provide both example scripts when launching with deepscale or mpirun.
+We provide example scripts under [DeepScaleExamples/bing_bert/1-bit_adam/](https://github.com/khulnasoft/DeepScaleExamples/tree/master/bing_bert/1-bit_adam). There are 3 sets of scripts corresponding to NCCL-based implementation, MPI-based implementation on Ethernet systems, and MPI-based implementation on InfiniBand systems. For MPI-based implementation, we provide both example scripts when launching with deepscale or mpirun.
 
 <!-- The main part of training is done in `deepscale_train.py`, which has
 already been modified to use DeepScale. The `ds_train_bert_onebit_bsz4k_seq128.sh` and `ds_train_bert_bsz64k_seq128.sh`
@@ -289,4 +301,4 @@ The above file is for BERT-large. For BERT-base training (sequence length 128), 
 
 ### 3.3 Performance Results for BERT Pre-training
 
-Performance results of BERT Pre-training can be seen from our [blog post](https://www.deepscale.khulnasoft.com/news/2020/09/09/onebit-adam-blog-post.html) and our [paper](https://arxiv.org/abs/2102.02888).
+Performance results of BERT Pre-training can be seen from our [blog post](https://www.deepscale.ai/2020/09/08/onebit-adam-blog-post.html) and our [paper](https://arxiv.org/abs/2102.02888).

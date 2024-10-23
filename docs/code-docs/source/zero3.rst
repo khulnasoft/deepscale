@@ -19,7 +19,7 @@ ZeRO-Infinity ([paper](https://arxiv.org/abs/2104.07857)), which can offload
 all model states to both CPU and NVMe memory for huge memory savings.
 
 
-For a deep dive of our algorithms, please see our `papers <https://www.deepscale.khulnasoft.com/#publications>`_ on `ZeRO
+For a deep dive of our algorithms, please see our `papers <https://www.deepscale.ai/#publications>`_ on `ZeRO
 <https://arxiv.org/abs/1910.02054>`_, `ZeRO-Offload
 <https://arxiv.org/abs/2101.06840>`_,
 and `ZeRO-Infinity <https://arxiv.org/abs/2104.07857>`_.
@@ -38,19 +38,37 @@ and `ZeRO-Infinity <https://arxiv.org/abs/2104.07857>`_.
 Getting Started
 ---------------
 
-If you are new to DeepScale, check out our `Getting Started <https://www.deepscale.khulnasoft.com/getting-started/>`_ page.
+If you are new to DeepScale, check out our `Getting Started <https://www.deepscale.ai/getting-started/>`_ page.
 
 Once you are training with DeepScale, enabling ZeRO-3 offload is as simple as enabling it
 in your DeepScale configuration! Below are a few examples of ZeRO-3 configurations. Please see
-our `config guide <https://www.deepscale.khulnasoft.com/docs/config-json/#zero-optimizations-for-fp16-training>`_
+our `config guide <https://www.deepscale.ai/docs/config-json/#zero-optimizations-for-fp16-training>`_
 for a complete list of options for configuration and performance tuning.
 
 .. note::
         ZeRO-Infinity and ZeRO-Offload work best with our heavily optimized
         :class:`deepscale.ops.adam.DeepScaleCPUAdam` optimizer. We recommend using
-        our `optimizer config <https://www.deepscale.khulnasoft.com/docs/config-json/#optimizer-parameters>`_
+        our `optimizer config <https://www.deepscale.ai/docs/config-json/#optimizer-parameters>`_
         to instruct :meth:`deepscale.initialize` to build the optimizer for you.
 
+ZeRO Configurations
+===================
+
+All the settings for DeepScale ZeRO are set with the `DeepScaleZeroConfig`_.
+The dictionary provided under the ``zero_optimization`` entry of the main
+DeepScale configuration dict will be parsed and validated with this class.
+Sub-configurations for parameter offload and optimizer offload settings are
+parsed by `DeepScaleZeroOffloadParamConfig`_ and
+`DeepScaleZeroOffloadOptimizerConfig`_.
+
+.. _DeepScaleZeroConfig:
+.. autopydantic_model:: deepscale.runtime.zero.config.DeepScaleZeroConfig
+
+.. _DeepScaleZeroOffloadParamConfig:
+.. autopydantic_model:: deepscale.runtime.zero.config.DeepScaleZeroOffloadParamConfig
+
+.. _DeepScaleZeroOffloadOptimizerConfig:
+.. autopydantic_model:: deepscale.runtime.zero.config.DeepScaleZeroOffloadOptimizerConfig
 
 
 Example ZeRO-3 Configurations
@@ -137,7 +155,39 @@ Example ZeRO-3 Configurations
             ...
         }
 
+MiCS Configurations
+===================
 
+All MiCS configurations are set with `DeepScaleZeroConfig`. MiCS assumes ZeRO
+stage 3 optimization is enabled. For now, there are two configuration fields of
+MiCS `mics_shard_size` and `mics_hierarchical_params_gather`. `mics_shard_size`
+controls how many devices are used for partitioning the model states.
+`mics_hierarchical_params_gather` controls whether we use a two-stage
+hierarchical way to gather parameters in the forward computation.
+`mics_hierarchical_params_gather` is useful when model states are partitioned
+across multiple nodes and the cross-node bandwidth is slow. By default this is
+turned off.
+
+
+Example MiCS Configurations
+===========================
+
+#. Use MiCS to partition the model states (including optimizer states,
+   gradients, and parameters). The following config example partitions the model
+   states to eight devices, and assumes the eight devices are located within a
+   single node (`mics_hierarchical_params_gather` is `False`).
+
+    .. code-block:: python
+        :emphasize-lines: 3
+
+        {
+            "zero_optimization": {
+                "stage": 3,
+                "mics_shard_size": 8,
+                "mics_hierarchical_params_gather": False,
+            },
+            ...
+        }
 
 Assumptions
 ===========
@@ -259,6 +309,17 @@ DeepScale can automatically detect the following external parameter scenarios:
 .. autofunction:: deepscale.zero.unregister_external_parameter
 
 
+.. `Module.apply <https://pytorch.org/docs/stable/generated/torch.nn.Module.html?highlight=module+apply#torch.nn.Module.apply>`_
+Overriding Module.apply
+===============================
+A convenient mechanism for customizing model initialization is `Module.apply <https://pytorch.org/docs/stable/generated/torch.nn.Module.html?highlight=module+apply#torch.nn.Module.apply>`_.
+With ZeRO stage 3, ``Module.apply`` implementations must account for parameter partitioning by ``zero.Init`` during model initialization. The default behavior of ZeRO stage 3 is to automatically
+handle this issue by overriding ``Module.apply`` to ensure that parameters are gathered before access by ``Module.apply``. The benefit of this approach is development convenience, since
+users are saved the burden of manual parameter coordination in ``Module.apply``. However, the downside is slow model initialization, since all the model parameters (e.g., billions) are gathered
+even though the common usage of ``Module.apply`` is to customize a few parameters. Developers can disable this default behavior by setting the ``override_module_apply`` configuration knob to ``False``,
+for faster model initialization at the cost of manually handling partitioned parameters in their ``Module.apply`` implementations.
+
+
 Memory-Centric Tiling
 ---------------------
 
@@ -275,3 +336,222 @@ parallelism to fit them in limited GPU memory.
 
 .. autoclass:: deepscale.zero.TiledLinear
     :members:
+
+
+Debugging
+---------
+
+Debugging ZeRO training is complicated by the partitioning of parameters, gradients, and optimizer states. None of these 3 groups of tensors (model states) can be normally accessed because of that. To overcome that DeepScale provides the following routines for accessing individual model states in both their partitioned (local) and unpartitioned (full) forms.
+
+Important: Please note that, to access the unpartitioned (full) form, these utilities must be called by all processes participating in the training, even if you decide to do something with the result only in the main process. If all processes don't participate these utilities will hang waiting for all processes to send their contribution.
+
+Additionally, you must be aware that these routines return correct data only in specific phases of the training. So for examples the gradients are valid after ``backward`` and before ``step``. The optimizer states are updated after ``step``. Same goes for fp32 master weights.
+
+.. autofunction:: deepscale.utils.safe_get_full_fp32_param
+
+.. autofunction:: deepscale.utils.safe_get_full_grad
+
+.. autofunction:: deepscale.utils.safe_get_full_optimizer_state
+
+.. autofunction:: deepscale.utils.safe_get_local_fp32_param
+
+.. autofunction:: deepscale.utils.safe_get_local_grad
+
+.. autofunction:: deepscale.utils.safe_get_local_optimizer_state
+
+
+These routines can be used in a training loop as shown in the following snippet.
+
+.. code-block:: python
+
+    backward(loss)
+    [...]
+    from deepscale.utils import safe_get_full_fp32_param, safe_get_full_grad, safe_get_full_optimizer_state
+    for n, lp in model.named_parameters():
+        # 1. Access the full states
+        #  1.1) gradient lookup
+        # For zero1 and zero2, gradient lookup must be called after `backward` and before `step`
+        # For zero3, gradient lookup must be called after `backward`
+        hp_grad = safe_get_full_grad(lp)
+
+
+        # 1.2) fp32 and optim states can probably be called anywhere in the training loop, but will be updated after `step`
+        hp = safe_get_full_fp32_param(lp)
+        exp_avg = safe_get_full_optimizer_state(lp, "exp_avg")
+        exp_avg_sq = safe_get_full_optimizer_state(lp, "exp_avg_sq")
+
+        # 2. Access the local states (zero3)
+        # For zero3, all of the parameters, gradients, and optimizer states are partitioned,
+        # and each process can access its corresponding local state.
+        local_hp = safe_get_local_fp32_param(lp)
+        local_hp_grad = safe_get_local_grad(lp)
+        local_exp_avg = safe_get_local_optimizer_state(lp, "exp_avg")
+        local_exp_avg_sq = safe_get_local_optimizer_state(lp, "exp_avg_sq")
+
+    [...]
+    optimizer.step()
+
+
+
+Modifying Partitioned States
+----------------------------
+
+Sometimes, a user may want to modify parameters, gradients, or optimizer states outside of the regular training loop. This is currently difficult in ZeRO training because of partitioning. To overcome that, DeepScale provides the following routines for modifying the fp32 master parameters and the fp32 optimizer states.
+
+.. autofunction:: deepscale.utils.safe_set_full_fp32_param
+
+.. autofunction:: deepscale.utils.safe_set_full_optimizer_state
+
+.. autofunction:: deepscale.utils.safe_set_full_grad
+
+.. autofunction:: deepscale.utils.safe_set_local_fp32_param
+
+.. autofunction:: deepscale.utils.safe_set_local_grad
+
+.. autofunction:: deepscale.utils.safe_set_local_optimizer_state
+
+The routines for modifying parameters and optimizer states can be used at any point after initialization of the DeepScale engine (i.e., ``deepscale.initialize()``) as shown in the following snippet.
+
+.. code-block:: python
+
+    [...]
+    from deepscale.runtime.zero.utils import is_zero_param
+    from deepscale.utils import safe_set_full_fp32_param, safe_set_full_optimizer_state
+    from deepscale.utils import safe_set_local_fp32_param, safe_set_local_optimizer_state
+    # Here is an example to zero all the fp32 parameters and optimizer states.
+    for n, lp in model.named_parameters():
+        # 1. For zero stage 1, 2, or 3 set the full fp32 and their full optim states
+        zero_tensor = torch.zeros(lp.ds_shape) if is_zero_param(lp) else torch.zeros(lp.shape)
+
+        safe_set_full_fp32_param(lp, zero_tensor)
+        safe_get_full_optimizer_state(lp, zero_tensor, "exp_avg")
+        safe_get_full_optimizer_state(lp, zero_tensor, "exp_avg_sq")
+
+        # 2. For zero stage 3, each process sets its local fp32 parameters and their local optimizer states individually
+        zero_tensor_local = torch.zeros(lp.ds_tensor.shape)
+
+        safe_set_local_fp32_param(lp, zero_tensor_local)
+        safe_set_local_optimizer_state(lp, zero_tensor_local, "exp_avg")
+        safe_set_local_optimizer_state(lp, zero_tensor_local, "exp_avg_sq")
+
+    [...]
+
+
+The routines for modifying gradients can be used after ``backward`` but before ``step`` as shown in the following snippet.
+
+.. code-block:: python
+
+    backward(loss)
+    [...]
+    from deepscale.runtime.zero.utils import is_zero_param
+    from deepscale.utils import safe_set_full_grad, safe_set_local_grad
+    # Here is an example of how to zero all the gradients.
+    for n, lp in model.named_parameters():
+        # 1. For zero stage 1, 2, or 3 set the full gradient.
+        zero_tensor = torch.zeros(lp.ds_shape) if is_zero_param(lp) else torch.zeros(lp.shape)
+
+        safe_set_full_grad(lp, zero_tensor)
+
+        # 2. For zero stage 3, each process sets its local gradient partition.
+        zero_tensor_local = torch.zeros_like(lp.ds_tensor.shape)
+
+        safe_set_local_grad(lp, zero_tensor_local)
+
+    [...]
+    optimizer.step()
+
+
+
+GPU Memory Management
+---------------------
+
+By default at the end of training with ZeRO stage 3 some parameters could remain unpartitioned and use up some gpu memory.
+This is done on purpose as an optimization should you resume training again. If you'd like to clear out the cached
+parameters that use up gpu memory, you can call ``empty_partition_cache`` method of a DeepScale engine.
+
+.. autofunction::deepscale.DeepScaleEngine.empty_partition_cache
+
+The following code snippet illustrates this functionality.
+
+.. code-block:: python
+
+    with zero.Init():
+        model = MyLargeModel()
+
+    ds_engine, _, _, _ = deepscale.initialize(model, ...)
+    for batch in ...:
+        loss = ds_engine(batch)
+        ds_engine.backward(batch)
+        ds_engine.step()
+
+    # Free GPU memory consumed by model parameters
+    ds_engine.empty_partition_cache()
+
+
+Offload States
+--------------
+
+The DeepScale engine maintains a set of states in device memory (e.g., CUDA memory). The following API allows you to offload these states to a different device (currently, only CPU memory is supported), reducing the memory footprint on the device.
+
+.. code-block:: python
+
+    def offload_states(self,
+                       include: Container[OffloadStateTypeEnum] = None,
+                       device: OffloadDeviceEnum = OffloadDeviceEnum.cpu,
+                       pin_memory: bool = True,
+                       non_blocking: bool = False) -> None:
+        """Offload the engine's states to the specified device.
+
+        Arguments:
+            include: Optional. The set of states to offload. If not provided, all states are offloaded.
+            device: Optional. The device to move the ZeRO optimizer buffers to. Currently only `OffloadDeviceEnum.cpu` is supported.
+            pin_memory: Optional. Whether to pin the memory of the offloaded states.
+            non_blocking: Optional. Whether to offload the states asynchronously.
+        """
+
+You can selectively offload specific states by specifying the ``OffloadStateTypeEnum`` in the include argument. ``OffloadStateTypeEnum`` is an enum that defines the states that can be offloaded. The following states are supported:
+
+* ``OffloadStateTypeEnum.optim_states``: Optimizer states. Currently, only states of DeepScale's FusedAdam optimizer are supported.
+* ``OffloadStateTypeEnum.hp_params``: FP32 parameters.
+* ``OffloadStateTypeEnum.lp_params``: BF16/FP16 parameters.
+* ``OffloadStateTypeEnum.lp_grads``: BF16/FP16 gradients.
+* ``OffloadStateTypeEnum.contiguous_grad_buffer``: The contiguous gradient buffer for reduce operations.
+
+Note that offloading states comes with a trade-off between memory savings and computational overhead. This API allows states to be reloaded back into device memory when needed.
+
+.. code-block:: python
+
+    def reload_states(self, non_blocking: bool = False) -> None:
+        """Reload the engine states to the original device.
+
+        Arguments:
+            non_blocking: Optional. Whether to offload the states asynchronously.
+        """
+
+Below is an example code snippet demonstrating how to offload FP32 parameters and optimizer states to CPU memory:
+
+.. code-block:: python
+
+    # Offload after forward, backward, and step
+    ds_engine.offload_states(include=[OffloadStateTypeEnum.hp_params, OffloadStateTypeEnum.optim_states])
+
+    # Do something requiring a lot of device memory
+    ...
+    # Load states back to device memory
+    ds_engine.reload_states()
+
+``deepscale.runtime.zero.offload_states.get_state_devices`` returns devices of the specified state.
+
+.. code-block:: python
+
+    def get_state_devices(model, state: OffloadStateTypeEnum) -> Set[torch.device]:
+        """Retrieve the devices of the specified state of the model.
+
+        Args:
+            model (DeepScaleEngine): The model whose device allocations are to be checked.
+            state (OffloadStateTypeEnum): The specific state for which the devices should be retrieved.
+
+        Returns:
+            Set[torch.device]: A set of devices of the specified state.
+
+        """

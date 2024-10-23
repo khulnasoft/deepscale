@@ -1,31 +1,28 @@
-"""
-Copyright 2024 The KhulnaSoft DeepScale Team
-"""
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
 
-import math
+# DeepScale Team
+
 import torch
-import time
-from pathlib import Path
-from ..op_builder import CPUAdamBuilder
+from cpuinfo import get_cpu_info
+from deepscale.utils import logger
 from deepscale.utils.logging import should_log_le
+from deepscale.ops.op_builder import CPUAdamBuilder
 
 
 class DeepScaleCPUAdam(torch.optim.Optimizer):
     optimizer_id = 0
 
-    def __init__(
-        self,
-        model_params,
-        lr=1e-3,
-        bias_correction=True,
-        betas=(0.9,
-               0.999),
-        eps=1e-8,
-        weight_decay=0,
-        amsgrad=False,
-        adamw_mode=True,
-        fp32_optimizer_states=True,
-    ):
+    def __init__(self,
+                 model_params,
+                 lr=1e-3,
+                 bias_correction=True,
+                 betas=(0.9, 0.999),
+                 eps=1e-8,
+                 weight_decay=0,
+                 amsgrad=False,
+                 adamw_mode=True,
+                 fp32_optimizer_states=True):
         """Fast vectorized implementation of two variations of Adam optimizer on CPU:
 
         * Adam: A Method for Stochastic Optimization: (https://arxiv.org/abs/1412.6980);
@@ -35,11 +32,11 @@ class DeepScaleCPUAdam(torch.optim.Optimizer):
         In order to apply this optimizer, the model requires to have its master parameter (in FP32)
         reside on the CPU memory.
 
-        To train on a hetrogeneous system, such as coordinating CPU and GPU, DeepScale offers
+        To train on a heterogeneous system, such as coordinating CPU and GPU, DeepScale offers
         the ZeRO-Offload technology which efficiently offloads the optimizer states into CPU memory,
-        with minimal impact on training througput. DeepScaleCPUAdam plays an important role to minimize
+        with minimal impact on training throughput. DeepScaleCPUAdam plays an important role to minimize
         the overhead of the optimizer's latency on CPU. Please refer to ZeRO-Offload tutorial
-        (https://www.deepscale.khulnasoft.com/tutorials/zero-offload/) for more information on how to enable this technology.
+        (https://www.deepscale.ai/tutorials/zero-offload/) for more information on how to enable this technology.
 
         For calling step function, there are two options available: (1) update optimizer's states and (2) update
         optimizer's states and copy the parameters back to GPU at the same time. We have seen that the second
@@ -48,7 +45,7 @@ class DeepScaleCPUAdam(torch.optim.Optimizer):
 
         .. note::
                 We recommend using our `config
-                <https://www.deepscale.khulnasoft.com/docs/config-json/#optimizer-parameters>`_
+                <https://www.deepscale.ai/docs/config-json/#optimizer-parameters>`_
                 to allow :meth:`deepscale.initialize` to build this optimizer
                 for you.
 
@@ -66,19 +63,29 @@ class DeepScaleCPUAdam(torch.optim.Optimizer):
                 algorithm from the paper `On the Convergence of Adam and Beyond`_
                 (default: False) NOT SUPPORTED in DeepScale CPUAdam!
             adamw_mode: select between Adam and AdamW implementations (default: AdamW)
-            full_precision_optimizer_states: creates momementum and variance in full precision regardless of
+            fp32_optimizer_states: creates momentum and variance in full precision regardless of
                         the precision of the parameters (default: True)
         """
 
-        default_args = dict(
-            lr=lr,
-            betas=betas,
-            eps=eps,
-            weight_decay=weight_decay,
-            bias_correction=bias_correction,
-            amsgrad=amsgrad,
-        )
+        default_args = dict(lr=lr,
+                            betas=betas,
+                            eps=eps,
+                            weight_decay=weight_decay,
+                            bias_correction=bias_correction,
+                            amsgrad=amsgrad)
         super(DeepScaleCPUAdam, self).__init__(model_params, default_args)
+
+        cpu_info = get_cpu_info()
+        self.cpu_vendor = cpu_info["vendor_id_raw"].lower() if "vendor_id_raw" in cpu_info else "unknown"
+        if "amd" in self.cpu_vendor:
+            for group_id, group in enumerate(self.param_groups):
+                for param_id, p in enumerate(group['params']):
+                    if p.dtype == torch.half:
+                        logger.warning("FP16 params for CPUAdam may not work on AMD CPUs")
+                        break
+                else:
+                    continue
+                break
 
         self.opt_id = DeepScaleCPUAdam.optimizer_id
         DeepScaleCPUAdam.optimizer_id = DeepScaleCPUAdam.optimizer_id + 1
@@ -86,16 +93,8 @@ class DeepScaleCPUAdam(torch.optim.Optimizer):
         self.fp32_optimizer_states = fp32_optimizer_states
         self.ds_opt_adam = CPUAdamBuilder().load()
 
-        self.ds_opt_adam.create_adam(
-            self.opt_id,
-            lr,
-            betas[0],
-            betas[1],
-            eps,
-            weight_decay,
-            adamw_mode,
-            should_log_le("info"),
-        )
+        self.ds_opt_adam.create_adam(self.opt_id, lr, betas[0], betas[1], eps, weight_decay, adamw_mode,
+                                     should_log_le("info"))
 
     def __del__(self):
         # need to destroy the C++ object explicitly to avoid a memory leak when deepscale.initialize
@@ -105,23 +104,21 @@ class DeepScaleCPUAdam(torch.optim.Optimizer):
     def __setstate__(self, state):
         super(DeepScaleCPUAdam, self).__setstate__(state)
         for group in self.param_groups:
-            group.setdefault("amsgrad", False)
+            group.setdefault('amsgrad', False)
 
     @torch.no_grad()
-    def step(self, closure=None, fp16_param_groups=None):
+    def step(self, closure=None):
         """Update the model parameters.
 
         .. note::
             This method will be called internally by ZeRO-Offload. DeepScale
             users should still use ``engine.step()`` as shown in the
             `Getting Started
-            <https://www.deepscale.khulnasoft.com/getting-started/#training>`_ guide.
+            <https://www.deepscale.ai/getting-started/#training>`_ guide.
 
         Args:
             closure (callable, optional): closure to compute the loss.
                 Defaults to ``None``.
-            fp16_param_groups: FP16 GPU parameters to update. Performing the
-                copy here reduces communication time. Defaults to ``None``.
 
         Returns:
             loss: if ``closure`` is provided. Otherwise ``None``.
@@ -132,64 +129,38 @@ class DeepScaleCPUAdam(torch.optim.Optimizer):
             with torch.enable_grad():
                 loss = closure()
 
+        # intended device for step
+        device = torch.device('cpu')
+
         for group_id, group in enumerate(self.param_groups):
-            for param_id, p in enumerate(group["params"]):
+            for param_id, p in enumerate(group['params']):
 
                 if p.grad is None:
                     continue
 
+                assert p.device == device, f"CPUAdam param is on {p.device} and must be 'cpu', make " \
+                        "sure you enabled 'offload_optimizer': 'cpu' in your ZeRO config."
+
                 state = self.state[p]
                 # State initialization
                 if len(state) == 0:
-                    # print(f'group {group_id} param {param_id} = {p.numel()}')
-                    state["step"] = 0
+                    #print(f'group {group_id} param {param_id} = {p.numel()}')
+                    state['step'] = 0
 
-                    # use full precision by default unless self.fp32_optimizer_states is off
+                    #use full precision by default unless self.fp32_optimizer_states is off
                     state_dtype = torch.float if self.fp32_optimizer_states else p.dtype
 
                     # gradient momentums
-                    state["exp_avg"] = torch.zeros_like(p.data,
-                                                        dtype=state_dtype,
-                                                        device="cpu")
-                    # memory_format=torch.preserve_format)
+                    state['exp_avg'] = torch.zeros_like(p.data, dtype=state_dtype, device=device)
+                    #memory_format=torch.preserve_format)
                     # gradient variances
-                    state["exp_avg_sq"] = torch.zeros_like(p.data,
-                                                           dtype=state_dtype,
-                                                           device="cpu")
-                    # memory_format=torch.preserve_format)
+                    state['exp_avg_sq'] = torch.zeros_like(p.data, dtype=state_dtype, device=device)
+                    #memory_format=torch.preserve_format)
 
-                state["step"] += 1
-                beta1, beta2 = group["betas"]
+                state['step'] += 1
+                beta1, beta2 = group['betas']
 
-                if fp16_param_groups is not None:
-                    self.ds_opt_adam.adam_update_copy(
-                        self.opt_id,
-                        state["step"],
-                        group["lr"],
-                        beta1,
-                        beta2,
-                        group["eps"],
-                        group["weight_decay"],
-                        group["bias_correction"],
-                        p.data,
-                        p.grad.data,
-                        state["exp_avg"],
-                        state["exp_avg_sq"],
-                        fp16_param_groups[group_id][param_id].data,
-                    )
-                else:
-                    self.ds_opt_adam.adam_update(
-                        self.opt_id,
-                        state["step"],
-                        group["lr"],
-                        beta1,
-                        beta2,
-                        group["eps"],
-                        group["weight_decay"],
-                        group["bias_correction"],
-                        p.data,
-                        p.grad.data,
-                        state["exp_avg"],
-                        state["exp_avg_sq"],
-                    )
+                self.ds_opt_adam.adam_update(self.opt_id, state['step'], group['lr'], beta1, beta2, group['eps'],
+                                             group['weight_decay'], group['bias_correction'], p.data, p.grad.data,
+                                             state['exp_avg'], state['exp_avg_sq'])
         return loss

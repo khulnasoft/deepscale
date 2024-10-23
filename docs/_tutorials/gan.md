@@ -1,6 +1,7 @@
 ---
 title: "DCGAN Tutorial"
 excerpt: "Train your first GAN model with DeepScale!"
+tags: getting-started training
 ---
 
 If you haven't already, we advise you to first read through the [Getting Started](/getting-started/) guide before stepping through this
@@ -15,7 +16,7 @@ Please go through the [original tutorial](https://pytorch.org/tutorials/beginner
 
 ## Enabling DeepScale
 
-The codes may be obtained [here](https://github.com/khulnasoft-lab/DeepScaleExamples/tree/master/gan).
+The codes may be obtained [here](https://github.com/khulnasoft/DeepScaleExamples/tree/master/gan).
 
 ### Argument Parsing
 
@@ -100,7 +101,7 @@ deepscale gan_deepscale_train.py --dataset celeba --cuda --deepscale_config gan_
 
 ## Performance Comparison
 
-We use a total batch size of 64 and perform the training on 16 GPUs for 1 epoch on a DGX-2 node which leads to 3x speed-up. The summary of the the results is given below:
+We use a total batch size of 64 and perform the training on 16 GPUs for 1 epoch on a DGX-2 node which leads to 3x speed-up. The summary of the results is given below:
 
 - Baseline total wall clock time for 1 epochs is 393 secs
 

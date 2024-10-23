@@ -1,4 +1,4 @@
-"""
-Copyright 2024 The KhulnaSoft DeepScale Team.
-Licensed under the MIT license.
-"""
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+# DeepScale Team

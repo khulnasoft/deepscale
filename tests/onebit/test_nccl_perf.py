@@ -1,6 +1,10 @@
-import time
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+# DeepScale Team
+
 import torch
-import torch.distributed as dist
+import deepscale.comm as dist
 import numpy as np
 import argparse
 import deepscale
@@ -8,19 +12,20 @@ import os
 
 from deepscale.runtime.comm.nccl import NcclBackend
 from deepscale.utils.timer import SynchronizedWallClockTimer
+from deepscale.accelerator import get_accelerator
 from statistics import mean
 
 timers = SynchronizedWallClockTimer()
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--local_rank", type=int, default=-1)
+parser.add_argument('--local_rank', type=int, default=-1)
 args = parser.parse_args()
 
-deepscale.init_distributed(dist_backend="nccl")
-args.local_rank = int(os.environ["LOCAL_RANK"])
+deepscale.init_distributed(dist_backend=get_accelerator().communication_backend_name())
+args.local_rank = int(os.environ['LOCAL_RANK'])
 
-torch.cuda.set_device(args.local_rank)
-device = torch.device("cuda", args.local_rank)
+get_accelerator().set_device(args.local_rank)
+device = torch.device(get_accelerator().device_name(), args.local_rank)
 
 size = dist.get_world_size()
 rank = dist.get_rank()
@@ -60,14 +65,14 @@ a_compressed = scale * a_sign
 print("Shape of the compressed buffer:", a_compressed.shape) if rank == 0 else None
 
 for i in range(iters):
-    timers("compressed_allreduce").start()
+    timers('compressed_allreduce').start()
     backend.compressed_allreduce(a, worker_error, server_error, local_rank)
-    # torch.distributed.all_reduce(a_compressed)
-    timers("compressed_allreduce").stop()
-    time_list.append(timers("compressed_allreduce").elapsed())
+    #deepscale.comm.all_reduce(a_compressed)
+    timers('compressed_allreduce').stop()
+    time_list.append(timers('compressed_allreduce').elapsed())
 
-# timer_names = ['compressed_allreduce']
-# timers.log(names=timer_names, normalizer=1, memory_breakdown=None)
+#timer_names = ['compressed_allreduce']
+#timers.log(names=timer_names, normalizer=1, memory_breakdown=None)
 
 places = 2
 convert = 1e3
@@ -81,15 +86,11 @@ if rank == 0:
 minlat = round(min(time_list) * convert)
 maxlat = round(max(time_list) * convert)
 meanlat = round(mean(time_list) * convert, places)
-(print("min, max, and mean = {} ms, {} ms, {} ms".format(minlat,
-                                                         maxlat,
-                                                         meanlat))
- if rank == 0 else None)
-# print("tensor shape", a.shape)
+print("min, max, and mean = {} ms, {} ms, {} ms".format(minlat, maxlat, meanlat)) if rank == 0 else None
+#print("tensor shape", a.shape)
 duration = meanlat / 1e3
-tput = (tensor_size * 4) / duration
-(print("algo throughput: %f Bytes/s, %f GB/s" % (tput,
-                                                 tput / 1e9)) if rank == 0 else None)
+tput = ((tensor_size * 4) / duration)
+print("algo throughput: %f Bytes/s, %f GB/s" % (tput, tput / 1e9)) if rank == 0 else None
 size = tensor_size * 4
 n = dist.get_world_size()
 busbw = (size / duration) * (2 * (n - 1) / n)

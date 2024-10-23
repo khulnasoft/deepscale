@@ -6,7 +6,7 @@ more efficient pre-training and fine-tuning, it includes the transformer layer c
 transformer layer module initialization.
 
 Here we present the transformer kernel API.
-Please see the `BERT pre-training tutorial <https://www.deepscale.khulnasoft.com/tutorials/bert-pretraining/>`_ for usage details.
+Please see the `BERT pre-training tutorial <https://www.deepscale.ai/tutorials/bert-pretraining/>`_ for usage details.
 
 DeepScale Transformer Config
 ----------------------------

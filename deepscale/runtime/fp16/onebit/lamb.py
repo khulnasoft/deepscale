@@ -1,17 +1,20 @@
-"""
-Copyright 2024 The KhulnaSoft DeepScale Team
-"""
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+# DeepScale Team
 
 import types
 import torch
 import numpy as np
-import torch.distributed as dist
+from deepscale import comm as dist
+from deepscale.utils.torch import required_torch_version
 from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
+from deepscale.accelerator import get_accelerator
 
 
 class OnebitLamb(torch.optim.Optimizer):
     """Implements the 1-bit Lamb algorithm. Currently GPU-only.
-    For usage example please see https://www.deepscale.khulnasoft.com/tutorials/onebit-lamb/
+    For usage example please see https://www.deepscale.ai/tutorials/onebit-lamb/
     For technical details please see our paper https://arxiv.org/abs/2104.06069.
 
     Arguments:
@@ -47,55 +50,49 @@ class OnebitLamb(torch.optim.Optimizer):
             coefficient during compression stage (default: 0.5)
         factor_threshold (float, optional): threshold of how much the scaling factor can
             fluctuate between steps (default: 0.1)
-    .. _Large Batch Optimization for Deep Learning\: Training BERT in 76 minutes:
+    .. _Large Batch Optimization for Deep Learning\\: Training BERT in 76 minutes:
         https://arxiv.org/abs/1904.00962
-    .. _Adam\: A Method for Stochastic Optimization:
+    .. _Adam\\: A Method for Stochastic Optimization:
         https://arxiv.org/abs/1412.6980
     .. _On the Convergence of Adam and Beyond:
         https://openreview.net/forum?id=ryQu7f-RZ
     """
-    def __init__(
-        self,
-        params,
-        deepscale=None,
-        lr=1e-3,
-        freeze_step=100000,
-        bias_correction=True,
-        betas=(0.9,
-               0.999),
-        eps=1e-8,
-        eps_inside_sqrt=False,
-        weight_decay=0.0,
-        max_grad_norm=0.0,
-        max_coeff=10.0,
-        min_coeff=0.01,
-        amsgrad=False,
-        cuda_aware=False,
-        comm_backend_name="nccl",
-        coeff_beta=0.9,
-        factor_max=4.0,
-        factor_min=0.5,
-        factor_threshold=0.1,
-    ):
+
+    def __init__(self,
+                 params,
+                 deepscale=None,
+                 lr=1e-3,
+                 freeze_step=100000,
+                 bias_correction=True,
+                 betas=(0.9, 0.999),
+                 eps=1e-8,
+                 eps_inside_sqrt=False,
+                 weight_decay=0.,
+                 max_grad_norm=0.,
+                 max_coeff=10.0,
+                 min_coeff=0.01,
+                 amsgrad=False,
+                 cuda_aware=False,
+                 comm_backend_name='nccl',
+                 coeff_beta=0.9,
+                 factor_max=4.0,
+                 factor_min=0.5,
+                 factor_threshold=0.1):
 
         if amsgrad:
-            raise RuntimeError("1-bit Lamb does not support the AMSGrad variant.")
+            raise RuntimeError('1-bit Lamb does not support the AMSGrad variant.')
 
-        defaults = dict(
-            lr=lr,
-            bias_correction=bias_correction,
-            betas=betas,
-            eps=eps,
-            weight_decay=weight_decay,
-            max_grad_norm=max_grad_norm,
-            max_coeff=max_coeff,
-            min_coeff=min_coeff,
-        )
+        defaults = dict(lr=lr,
+                        bias_correction=bias_correction,
+                        betas=betas,
+                        eps=eps,
+                        weight_decay=weight_decay,
+                        max_grad_norm=max_grad_norm,
+                        max_coeff=max_coeff,
+                        min_coeff=min_coeff)
 
         super(OnebitLamb, self).__init__(params, defaults)
         self.eps_mode = 0 if eps_inside_sqrt else 1
-        assert dist.is_initialized()
-
         self.deepscale = deepscale
         self.lamb_freeze_key = False
         self.initialize = False
@@ -109,28 +106,27 @@ class OnebitLamb(torch.optim.Optimizer):
 
         self.comm_backend_name = comm_backend_name
 
+        assert dist.is_initialized(), "Please initialize the torch distributed backend."
         # Empty initializer. Set handle based on the comm backend as follows.
         self.comm_backend_handle = None
-
-        if self.comm_backend_name == "nccl":
-            TORCH_MAJOR = int(torch.__version__.split(".")[0])
-            TORCH_MINOR = int(torch.__version__.split(".")[1])
+        if self.comm_backend_name == 'nccl':
             assert (
-                TORCH_MAJOR >= 1 and TORCH_MINOR >= 8
+                required_torch_version(min_version=1.8)
             ), "Please use torch 1.8 or greater to enable NCCL backend in 1-bit Adam. Alternatively, please specify 'mpi' as the 'comm_backend_name' in config file to proceed with the MPI backend"
-            assert (
-                dist.is_initialized() == True
-            ), "Please initialize the torch distributed backend."
             from deepscale.runtime.comm.nccl import NcclBackend
-
-            self.using_pipeline = hasattr(self.deepscale,
-                                          "pipeline_enable_backward_allreduce")
+            self.using_pipeline = hasattr(self.deepscale, 'pipeline_enable_backward_allreduce')
             self.comm_backend_handle = NcclBackend(self.deepscale.mpu)
-
-        elif self.comm_backend_name == "mpi":
+        elif self.comm_backend_name == 'mpi':
             from deepscale.runtime.comm.mpi import MpiBackend
-
             self.comm_backend_handle = MpiBackend(cuda_aware)
+        elif self.comm_backend_name == 'hccl':
+            from deepscale.runtime.comm.hccl import HcclBackend
+            self.using_pipeline = hasattr(self.deepscale, 'pipeline_enable_backward_allreduce')
+            self.comm_backend_handle = HcclBackend(self.deepscale.mpu)
+        elif self.comm_backend_name == 'compressed':
+            from deepscale.runtime.comm.compressed import CompressedBackend
+            self.using_pipeline = hasattr(self.deepscale, 'pipeline_enable_backward_allreduce')
+            self.comm_backend_handle = CompressedBackend(self.deepscale.mpu)
 
         self.size = self.comm_backend_handle.size
 
@@ -175,79 +171,70 @@ class OnebitLamb(torch.optim.Optimizer):
         if self.lamb_freeze_key:
             exp_avg_last_step = []
             for group in self.param_groups:
-                exp_avg_last_step.append(
-                    [self.state[p]["exp_avg"].detach().clone() for p in group["params"]])
-            if "scaling_coeff" not in self.state[self.param_groups[0]["params"][0]]:
+                exp_avg_last_step.append([self.state[p]['exp_avg'].detach().clone() for p in group['params']])
+            if 'scaling_coeff' not in self.state[self.param_groups[0]['params'][0]]:
                 # Compute the scaling_coeff for each momentum at the end of warmup stage.
                 # This is used to reduce compression error during compression stage.
                 momentum_scales = []
                 for group in self.param_groups:
-                    momentum_scales.append([
-                        (torch.norm(self.state[p]["exp_avg"]) /
-                         np.sqrt(torch.numel(self.state[p]["exp_avg"]))).item()
-                        for p in group["params"]
-                    ])
-                united_scale = sum([sum(x) for x in momentum_scales]) / sum(
-                    [len(x) for x in momentum_scales])
+                    momentum_scales.append([(torch.linalg.norm(self.state[p]['exp_avg']) /
+                                             np.sqrt(torch.numel(self.state[p]['exp_avg']))).item()
+                                            for p in group['params']])
+                united_scale = sum([sum(x) for x in momentum_scales]) / sum([len(x) for x in momentum_scales])
                 for i, group in enumerate(self.param_groups):
-                    for j, p in enumerate(group["params"]):
-                        self.state[p]["scaling_coeff"] = (united_scale /
-                                                          momentum_scales[i][j])
+                    for j, p in enumerate(group['params']):
+                        self.state[p]['scaling_coeff'] = united_scale / momentum_scales[i][j]
 
         for group, grads_this_group in zip(self.param_groups, grads_group):
             if grads_this_group is None:
-                grads_this_group = [None] * len(group["params"])
+                grads_this_group = [None] * len(group['params'])
 
-            bias_correction = 1 if group["bias_correction"] else 0
+            bias_correction = 1 if group['bias_correction'] else 0
 
-            for p, grad in zip(group["params"], grads_this_group):
+            for p, grad in zip(group['params'], grads_this_group):
                 if p.grad is None and grad is None:
                     continue
                 if grad is None:
                     grad = p.grad.data
                 if grad.is_sparse:
-                    raise RuntimeError("1-bit Lamb does not support sparse gradients")
+                    raise RuntimeError('1-bit Lamb does not support sparse gradients')
 
                 state = self.state[p]
 
                 # State initialization
-                if len(state) == 0 or (len(state) == 1
-                                       and "scaling_coeff" in state.keys()):
-                    state["step"] = 0
-                    state["lamb_coeff_freeze"] = 0.0
-                    state["last_factor"] = 1.0
+                if len(state) == 0 or (len(state) == 1 and 'scaling_coeff' in state.keys()):
+                    state['step'] = 0
+                    state['lamb_coeff_freeze'] = 0.0
+                    state['last_factor'] = 1.0
                     # Exponential moving average of gradient values
-                    state["exp_avg"] = torch.zeros_like(p.data)
+                    state['exp_avg'] = torch.zeros_like(p.data)
                     # Exponential moving average of squared gradient values
-                    state["exp_avg_sq"] = torch.zeros_like(p.data)
-                    state["exp_avg_sq_fresh"] = torch.zeros_like(p.data)
+                    state['exp_avg_sq'] = torch.zeros_like(p.data)
+                    state['exp_avg_sq_fresh'] = torch.zeros_like(p.data)
 
                 if not self.initialize:
                     self.lamb_freeze_key = True
 
-                exp_avg, exp_avg_sq, exp_avg_sq_fresh = (
-                    state["exp_avg"],
-                    state["exp_avg_sq"],
-                    state["exp_avg_sq_fresh"],
-                )
-                beta1, beta2 = group["betas"]
-                max_coeff = group["max_coeff"]
-                min_coeff = group["min_coeff"]
+                exp_avg, exp_avg_sq, exp_avg_sq_fresh = state['exp_avg'], state['exp_avg_sq'], state[
+                    'exp_avg_sq_fresh']
+                beta1, beta2 = group['betas']
+                max_coeff = group['max_coeff']
+                min_coeff = group['min_coeff']
 
-                state["step"] += 1
+                state['step'] += 1
 
                 if self.lamb_freeze_key is False:
                     # warmup stage, baseline Lamb optimization
                     exp_avg.mul_(beta1).add_(1 - beta1, grad)
                     exp_avg_sq.mul_(beta2).addcmul_(1 - beta2, grad, grad)
-                    if state["step"] == self.freeze_step:
+                    if state['step'] == self.freeze_step:
                         exp_avg_sq_fresh.data = exp_avg_sq.detach().clone()
                     grad = None
                     if self.initialize:
                         weight_norm = p.data.pow(2).sum().sqrt()
-                        update = exp_avg / (exp_avg_sq.sqrt() + group["eps"])
-                        if group["weight_decay"] > 0.0:
-                            update += group["weight_decay"] * p.data
+                        update = exp_avg / (exp_avg_sq.sqrt() + group['eps'])
+                        if group['weight_decay'] > 0.0:
+                            update += group['weight_decay'] * p.data
                         update_norm = update.pow(2).sum().sqrt()
                         lamb_coeff = 1.0
                         if weight_norm != 0 and update_norm != 0:
@@ -257,18 +244,17 @@ class OnebitLamb(torch.optim.Optimizer):
                             if lamb_coeff < min_coeff:
                                 lamb_coeff = min_coeff
                         if lamb_coeff != 1.0:
-                            state["lamb_coeff_freeze"] = (
-                                self.coeff_beta * state["lamb_coeff_freeze"] +
-                                (1 - self.coeff_beta) * lamb_coeff)
+                            state['lamb_coeff_freeze'] = self.coeff_beta * state['lamb_coeff_freeze'] + (
+                                1 - self.coeff_beta) * lamb_coeff
                         self.lamb_coeffs.append(lamb_coeff)
                         with torch.no_grad():
-                            p.add_(-group["lr"] * lamb_coeff * update)
+                            p.add_(-group['lr'] * lamb_coeff * update)
                 else:
                     # compression stage, update each momentum locally, then
                     # communicate based on the compressed_allreduce below
                     if self.initialize:
                         exp_avg.mul_(beta1).add_(1 - beta1, grad)
-                        exp_avg.mul_(self.state[p]["scaling_coeff"])
+                        exp_avg.mul_(self.state[p]['scaling_coeff'])
                     grad = None
 
         # init fused momentum
@@ -276,92 +262,65 @@ class OnebitLamb(torch.optim.Optimizer):
             momentum_groups = []
             tensor_size = 0
             for group in self.param_groups:
-                for p in group["params"]:
-                    momentum_groups.append(self.state[p]["exp_avg"])
+                for p in group['params']:
+                    momentum_groups.append(self.state[p]['exp_avg'])
                     tensor_size += torch.numel(p.data)
             corrected_tensor_size = tensor_size
             if tensor_size % (self.size * self.divider) != 0:
-                difference = (self.size * self.divider) - (tensor_size %
-                                                           (self.size * self.divider))
+                difference = ((self.size * self.divider) - (tensor_size % (self.size * self.divider)))
                 corrected_tensor_size += difference
-                self.dummy_exp_avg[0] = torch.zeros(
-                    difference,
-                    device=momentum_groups[0].data.device)
+                self.dummy_exp_avg[0] = torch.zeros(difference, device=momentum_groups[0].data.device)
                 momentum_groups.append(self.dummy_exp_avg[0])
             self.corrected_tensor_sizes.append(corrected_tensor_size)
             self.server_chunk_sizes.append(corrected_tensor_size // self.size)
 
-            self.exp_avg_flat.append(
-                _flatten_dense_tensors([p.detach().clone() for p in momentum_groups]))
-            updated_params = _unflatten_dense_tensors(self.exp_avg_flat[0],
-                                                      momentum_groups)
+            self.exp_avg_flat.append(_flatten_dense_tensors([p.detach().clone() for p in momentum_groups]))
+            updated_params = _unflatten_dense_tensors(self.exp_avg_flat[0], momentum_groups)
             for p, q in zip(momentum_groups, updated_params):
                 p.data = q.data
 
         if self.initialize and len(self.worker_errors) == 0:
-            torch.cuda.empty_cache()
+            get_accelerator().empty_cache()
             for i in range(len(self.exp_avg_flat)):
                 self.worker_errors.append(
-                    torch.zeros(
-                        self.corrected_tensor_sizes[i],
-                        device=self.exp_avg_flat[i].device,
-                    ))
-                self.server_errors.append(
-                    torch.zeros(self.server_chunk_sizes[i],
-                                device=self.exp_avg_flat[i].device))
-            torch.cuda.empty_cache()
+                    torch.zeros(self.corrected_tensor_sizes[i], device=self.exp_avg_flat[i].device))
+                self.server_errors.append(torch.zeros(self.server_chunk_sizes[i], device=self.exp_avg_flat[i].device))
+            get_accelerator().empty_cache()
 
         if self.lamb_freeze_key:
             if self.size > 1:
                 for i in range(len(self.exp_avg_flat)):
                     if not self.initialize:
-                        torch.cuda.empty_cache()
+                        get_accelerator().empty_cache()
                         self.worker_errors.append(
-                            torch.zeros(
-                                self.corrected_tensor_sizes[i],
-                                device=self.exp_avg_flat[i].device,
-                            ))
+                            torch.zeros(self.corrected_tensor_sizes[i], device=self.exp_avg_flat[i].device))
                         self.server_errors.append(
-                            torch.zeros(
-                                self.server_chunk_sizes[i],
-                                device=self.exp_avg_flat[i].device,
-                            ))
-                        torch.cuda.empty_cache()
-                        if torch.distributed.get_rank() == 0:
+                            torch.zeros(self.server_chunk_sizes[i], device=self.exp_avg_flat[i].device))
+                        get_accelerator().empty_cache()
+                        if dist.get_rank() == 0:
                             print("Cupy Buffers Initialized Successfully.")
 
-                        self.comm_backend_handle.compressed_allreduce(
-                            self.exp_avg_flat[i],
-                            self.worker_errors[0],
-                            self.server_errors[0],
-                            self.deepscale.local_rank,
-                        )
+                        self.comm_backend_handle.compressed_allreduce(self.exp_avg_flat[i], self.worker_errors[0],
+                                                                      self.server_errors[0], self.deepscale.local_rank)
 
-                        if torch.distributed.get_rank() == 0:
-                            print("Pop out errors", flush=True)
+                        if dist.get_rank() == 0:
+                            print('Pop out errors', flush=True)
                         del self.worker_errors[:]
                         del self.server_errors[:]
                     else:
-                        self.comm_backend_handle.compressed_allreduce(
-                            self.exp_avg_flat[i],
-                            self.worker_errors[i],
-                            self.server_errors[i],
-                            self.deepscale.local_rank,
-                        )
+                        self.comm_backend_handle.compressed_allreduce(self.exp_avg_flat[i], self.worker_errors[i],
+                                                                      self.server_errors[i], self.deepscale.local_rank)
 
         if self.lamb_freeze_key and self.initialize:
             for i, group in enumerate(self.param_groups):
-                bias_correction = 1 if group["bias_correction"] else 0
+                bias_correction = 1 if group['bias_correction'] else 0
 
-                for j, p in enumerate(group["params"]):
+                for j, p in enumerate(group['params']):
                     state = self.state[p]
-                    exp_avg, exp_avg_sq, exp_avg_sq_fresh = (
-                        state["exp_avg"],
-                        state["exp_avg_sq"],
-                        state["exp_avg_sq_fresh"],
-                    )
-                    beta1, beta2 = group["betas"]
-                    exp_avg.div_(self.state[p]["scaling_coeff"])
+                    exp_avg, exp_avg_sq, exp_avg_sq_fresh = state['exp_avg'], state['exp_avg_sq'], state[
+                        'exp_avg_sq_fresh']
+                    beta1, beta2 = group['betas']
+                    exp_avg.div_(self.state[p]['scaling_coeff'])
                     # Because 1-bit compression cannot represent exact zero, it is required to
                     # provide a momentum mask for those params that have constant exact zeros in their
                     # momentums, otherwise the compression error would keep accumulating.
@@ -370,62 +329,53 @@ class OnebitLamb(torch.optim.Optimizer):
                     # learns up to seq length 128 while the model supports up to 512 seq length.
                     # (See example in DeepScaleExamples/bing_bert/deepscale_train.py about how
                     # to add this exp_avg_mask for BERT pre-training.)
-                    if "exp_avg_mask" in group:
-                        if exp_avg.device != group["exp_avg_mask"].device:
-                            group["exp_avg_mask"] = group["exp_avg_mask"].to(
-                                device=exp_avg.device)
-                        exp_avg.mul_(group["exp_avg_mask"])
+                    if 'exp_avg_mask' in group:
+                        if exp_avg.device != group['exp_avg_mask'].device:
+                            group['exp_avg_mask'] = group['exp_avg_mask'].to(device=exp_avg.device)
+                        exp_avg.mul_(group['exp_avg_mask'])
 
-                    grad_reconstruct = (exp_avg -
-                                        exp_avg_last_step[i][j] * beta1) / (1 - beta1)
-                    exp_avg_sq_fresh.mul_(beta2).addcmul_(1 - beta2,
-                                                          grad_reconstruct,
-                                                          grad_reconstruct)
-                    denom = exp_avg_sq.sqrt() + group["eps"]
+                    grad_reconstruct = ((exp_avg - exp_avg_last_step[i][j] * beta1) / (1 - beta1))
+                    exp_avg_sq_fresh.mul_(beta2).addcmul_(1 - beta2, grad_reconstruct, grad_reconstruct)
+                    denom = exp_avg_sq.sqrt() + group['eps']
                     update_prelim = exp_avg / denom
 
-                    if group["weight_decay"] > 0.0:
-                        update = update_prelim + group["weight_decay"] * p.data
+                    if group['weight_decay'] > 0.0:
+                        update = update_prelim + group['weight_decay'] * p.data
                     else:
                         update = update_prelim
 
                     lamb_coeff = 1.0
                     update_norm = update.pow(2).sum().sqrt()
-                    denom_real = exp_avg_sq_fresh.sqrt() + group["eps"]
+                    denom_real = exp_avg_sq_fresh.sqrt() + group['eps']
                     factor = (denom / denom_real).max().item()
-                    if group["weight_decay"] > 0.0:
-                        update_ratio = min(
-                            1.0,
-                            (update_prelim.pow(2).sum().sqrt() / update_norm).item(),
-                        )
+                    if group['weight_decay'] > 0.0:
+                        update_ratio = min(1.0, (update_prelim.pow(2).sum().sqrt() / update_norm).item())
                         factor = factor * update_ratio + (1.0 - update_ratio)
                     if factor > self.factor_max:
                         factor = self.factor_max
                     if factor < self.factor_min:
                         factor = self.factor_min
-                    if factor > state["last_factor"] * (1.0 + self.factor_threshold):
-                        factor = state["last_factor"] * (1.0 + self.factor_threshold)
-                    if factor < state["last_factor"] * (1.0 - self.factor_threshold):
-                        factor = state["last_factor"] * (1.0 - self.factor_threshold)
-                    state["last_factor"] = factor
-                    lamb_coeff = state["lamb_coeff_freeze"] * factor
+                    if factor > state['last_factor'] * (1.0 + self.factor_threshold):
+                        factor = state['last_factor'] * (1.0 + self.factor_threshold)
+                    if factor < state['last_factor'] * (1.0 - self.factor_threshold):
+                        factor = state['last_factor'] * (1.0 - self.factor_threshold)
+                    state['last_factor'] = factor
+                    lamb_coeff = state['lamb_coeff_freeze'] * factor
                     self.lamb_coeffs.append(lamb_coeff)
                     with torch.no_grad():
-                        p.add_(-group["lr"] * lamb_coeff * update)
+                        p.add_(-group['lr'] * lamb_coeff * update)
             del exp_avg_last_step[:]
             exp_avg_last_step = None
 
         if not self.initialize:
             self.lamb_freeze_key = False
             self.initialize = True
-            print(
-                f"Finished the initialization step at rank {torch.distributed.get_rank()}"
-            )
+            print(f"Finished the initialization step at rank {dist.get_rank()}")
             return loss
 
         if self.lamb_freeze_key is False:
-            if state["step"] >= self.freeze_step:
-                print("OnebitLamb - starting compressed communication")
+            if state['step'] >= self.freeze_step:
+                print('OnebitLamb - starting compressed communication')
                 self.lamb_freeze_key = True
                 if self.using_pipeline:
                     self.deepscale.pipeline_enable_backward_allreduce = False
@@ -444,19 +394,18 @@ class OnebitLamb(torch.optim.Optimizer):
         # (See example in DeepScaleExamples/bing_bert/deepscale_train.py.)
         # Thus here we keep the exp_avg_mask unchanged when loading checkpoint
         for i, group in enumerate(self.param_groups):
-            if "exp_avg_mask" in group:
-                state_dict["param_groups"][i]["exp_avg_mask"] = group["exp_avg_mask"]
-            elif ("exp_avg_mask" not in group
-                  and "exp_avg_mask" in state_dict["param_groups"][i]):
-                state_dict["param_groups"][i].pop("exp_avg_mask")
+            if 'exp_avg_mask' in group:
+                state_dict['param_groups'][i]['exp_avg_mask'] = group['exp_avg_mask']
+            elif 'exp_avg_mask' not in group and 'exp_avg_mask' in state_dict['param_groups'][i]:
+                state_dict['param_groups'][i].pop('exp_avg_mask')
         super().load_state_dict(state_dict)
         # need to reset the fused momentum since loading states will break the linking
         del self.exp_avg_flat[:]
         self.dummy_exp_avg.clear()
         del self.corrected_tensor_sizes[:]
         del self.server_chunk_sizes[:]
-        if self.state[self.param_groups[0]["params"][0]]["step"] < self.freeze_step:
-            if torch.distributed.get_rank() == 0:
+        if self.state[self.param_groups[0]['params'][0]]['step'] < self.freeze_step:
+            if dist.get_rank() == 0:
                 print("Checkpoint loaded and OnebitLamb warmup stage starts/continues.")
             if self.lamb_freeze_key is True:
                 self.lamb_freeze_key = False
@@ -465,16 +414,14 @@ class OnebitLamb(torch.optim.Optimizer):
                 else:
                     self.deepscale.enable_backward_allreduce = True
             for group in self.param_groups:
-                for p in group["params"]:
-                    self.state[p]["lamb_coeff_freeze"] = 0.0
-                    self.state[p]["last_factor"] = 1.0
-                    if "scaling_coeff" in self.state[p]:
-                        self.state[p].pop("scaling_coeff")
+                for p in group['params']:
+                    self.state[p]['lamb_coeff_freeze'] = 0.0
+                    self.state[p]['last_factor'] = 1.0
+                    if 'scaling_coeff' in self.state[p]:
+                        self.state[p].pop('scaling_coeff')
         else:
-            if torch.distributed.get_rank() == 0:
-                print(
-                    "Checkpoint loaded and OnebitLamb compression stage starts/continues."
-                )
+            if dist.get_rank() == 0:
+                print("Checkpoint loaded and OnebitLamb compression stage starts/continues.")
             if self.lamb_freeze_key is False:
                 self.lamb_freeze_key = True
                 if self.using_pipeline:

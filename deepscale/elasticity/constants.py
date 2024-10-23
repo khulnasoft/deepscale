@@ -1,15 +1,16 @@
-"""
-Copyright 2024 The KhulnaSoft DeepScale Team
-"""
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+# DeepScale Team
 
 #########################################
 # Elasticity
 #########################################
-""" Elasticity Utility in DeepScale can be used to create highly elastic jobs compatible
+''' Elasticity Utility in DeepScale can be used to create highly elastic jobs compatible
 with a large number of GPUs. For elastic jobs, DeepScale will provide a batch size that
 can support a large number of GPUs based on the user specified parameters
-"""
-FORMAT = """
+'''
+FORMAT = '''
 Elasticity should be enabled as:
 "elasticity": {
   "enabled": true,
@@ -22,29 +23,35 @@ Elasticity should be enabled as:
   "ignore_non_elastic_batch_info": false,
   "version": 0.1
 }
-"""
+'''
 
-ELASTICITY = "elasticity"
+ELASTICITY = 'elasticity'
 
 # Current elasticity version
-LATEST_ELASTICITY_VERSION = 0.1
+LATEST_ELASTICITY_VERSION = 0.2
 
-ENABLED = "enabled"
+ENABLED = 'enabled'
 ENABLED_DEFAULT = False
 
 # Max acceptable train_batch_size
-MAX_ACCEPTABLE_BATCH_SIZE = "max_train_batch_size"
+MAX_ACCEPTABLE_BATCH_SIZE = 'max_train_batch_size'
 MAX_ACCEPTABLE_BATCH_SIZE_DEFAULT = 2000
 
 # Acceptable micro batch sizes, same as train_micro_batch_size_per_gpu
-MICRO_BATCHES = "micro_batch_sizes"
+MICRO_BATCHES = 'micro_batch_sizes'
 MICRO_BATCHES_DEFAULT = [2, 4, 6]
 
 # Min/max of GPUs to search over
-MIN_GPUS = "min_gpus"
+MIN_GPUS = 'min_gpus'
 MIN_GPUS_DEFAULT = 1
-MAX_GPUS = "max_gpus"
+MAX_GPUS = 'max_gpus'
 MAX_GPUS_DEFAULT = 10000
+
+NUM_GPUS_PER_NODE = 'num_gpus_per_node'
+NUM_GPUS_PER_NODE_DEFAULT = 1
+
+MODEL_PARALLEL_SIZE = "model_parallel_size"
+MODEL_PARALLEL_SIZE_DEFAULT = 1
 
 # Minimum running time (minutes) before the scheduler will scale us, 0 implies it's unknown
 MIN_TIME = "min_time"
@@ -52,7 +59,7 @@ MIN_TIME_DEFAULT = 0
 
 # When finding a suitable batch size, attempt to find one that is closest
 # to the max train batch size given.
-PREFER_LARGER_BATCH = "prefer_larger_batch"
+PREFER_LARGER_BATCH = 'prefer_larger_batch'
 PREFER_LARGER_BATCH_DEFAULT = True
 
 # In order to reduce confusion, if elastic mode is enabled we
@@ -60,7 +67,7 @@ PREFER_LARGER_BATCH_DEFAULT = True
 # elastic config. You can turn off this assert via this config
 # but keep in mind that all batch info defined outside the
 # elastic mode *will be ignored*.
-IGNORE_NON_ELASTIC_BATCH_INFO = "ignore_non_elastic_batch_info"
+IGNORE_NON_ELASTIC_BATCH_INFO = 'ignore_non_elastic_batch_info'
 IGNORE_NON_ELASTIC_BATCH_INFO_DEFAULT = False
 
 # Version of elastic logic to use

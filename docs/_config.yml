@@ -1,18 +1,20 @@
 title: DeepScale
-email: deepscale@khulnasoft.com
+email: deepscale@microsoft.com
 description: >-
   DeepScale is a deep learning optimization library that makes distributed
   training easy, efficient, and effective.
 
 locale : "en-US"
+logo: /assets/images/deepscale-logo-uppercase-bold-white-1.15.svg
 
 repository: khulnasoft/DeepScale
 baseurl: "/" # the subpath of your site, e.g. /blog
-url: "https://www.deepscale.khulnasoft.com" # the base hostname & protocol for your site, e.g. http://example.com
+url: "https://www.deepscale.ai" # the base hostname & protocol for your site, e.g. http://example.com
 
 # Build settings
 remote_theme: "mmistakes/minimal-mistakes@4.19.0"
 minimal_mistakes_skin : "air"
+search: true
 
 plugins:
   - jekyll-feed
@@ -33,16 +35,28 @@ collections:
       - advanced-install.md
       - getting-started.md
       - azure.md
+      - automatic-tensor-parallelism.md
       - bert-finetuning.md
       - bert-pretraining.md
       - cifar-10.md
       - curriculum-learning.md
+      - data-efficiency.md
+      - ds4sci_evoformerattention.md
       - flops-profiler.md
+      - pytorch-profiler.md
+      - autotuning.md
       - gan.md
       - lrrt.md
       - megatron.md
+      - mixture-of-experts.md
+      - mixture-of-experts-nlg.md
+      - mixture-of-experts-inference.md
+      - model-compression.md
+      - monitor.md
+      - comms-logging.md
       - one-cycle.md
       - onebit-adam.md
+      - zero-one-adam.md
       - onebit-lamb.md
       - pipeline.md
       - progressive_layer_dropping.md
@@ -70,12 +84,29 @@ defaults:
       path: "_pages"
     values:
       permalink: /docs/:basename/
+      toc: true
+      toc_label: "Contents"
   - scope:
       path: ""
       type: posts
     values:
-      layout: single
+      layout: single-full
+      author_profile: false
+      read_time: false
+      comments: false
       share: true
+      related: false
+      toc: true
+      toc_label: "Contents"
+      toc_sticky: true
+      show_date: true
+  - scope:
+      path: ""
+      type: tutorials
+    values:
+      layout: single
+      toc_sticky: true
+
 
 analytics:
   provider: "google-gtag"
@@ -85,4 +116,6 @@ analytics:
 timezone: America/Los_Angeles
 breadcrumbs: true
 
-press_release_v3: https://www.khulnasoft.com/en-us/research/blog/deepscale-extreme-scale-model-training-for-everyone/
+press_release_v3: https://www.microsoft.com/en-us/research/blog/deepscale-extreme-scale-model-training-for-everyone/
+press_release_v5: https://www.microsoft.com/en-us/research/blog/deepscale-powers-8x-larger-moe-model-training-with-high-performance/
+press_release_v6: https://www.microsoft.com/en-us/research/blog/deepscale-advancing-moe-inference-and-training-to-power-next-generation-ai-scale/

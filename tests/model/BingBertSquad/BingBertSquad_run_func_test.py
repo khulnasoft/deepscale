@@ -1,12 +1,13 @@
-# coding=utf-8
-# Copyright (c) 2024, The KhulnaSoft DeepScale Team. All rights reserved.
-#
-# Note: please copy webtext data to "Megatron-LM" folder, before running this script.
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+# DeepScale Team
+"""
+Note: please copy webtext data to "Megatron-LM" folder, before running this script.
+"""
 
 import unittest
-import subprocess
 import os
-import time
 import re
 from .BingBertSquad_test_common import BaseTestCase
 
@@ -14,10 +15,10 @@ from .BingBertSquad_test_common import BaseTestCase
 def grep_loss_from_file(file_name):
     loss = 0.0
 
-    with open(file_name, "r") as f:
+    with open(file_name, 'r') as f:
         lines = f.readlines()
         line_filter = "bert_squad_progress: step="
-        match_number = re.compile("loss=([-+]?[0-9]+\.?[0-9]*(?:[Ee][-+]?[0-9]+)?)")
+        match_number = re.compile(r'loss=([-+]?[0-9]+\.?[0-9]*(?:[Ee][-+]?[0-9]+)?)')
 
         for line in lines:
             if line_filter in line:
@@ -31,6 +32,7 @@ def grep_loss_from_file(file_name):
 
 
 class BingBertSquadFuncTestCase(BaseTestCase):
+
     def __init__(self, methodName="DeepScale function test on BingBertSquad model"):
         super(BingBertSquadFuncTestCase, self).__init__(methodName)
 
@@ -50,7 +52,7 @@ class BingBertSquadFuncTestCase(BaseTestCase):
             "json": "deepscale_bsz24_fp16_config.json",
             "max_steps": 8,
             "max_epoch_steps": 4,
-            "other_args": "--fp16 --print_steps 1",
+            "other_args": "--fp16 --print_steps 1"
         }
 
         succ = self.run_test(test_config, 0.01)
@@ -63,7 +65,7 @@ class BingBertSquadFuncTestCase(BaseTestCase):
             "json": "deepscale_bsz24_fp16_zero2_config.json",
             "max_steps": 8,
             "max_epoch_steps": 4,
-            "other_args": "--fp16 --print_steps 1",
+            "other_args": "--fp16 --print_steps 1"
         }
 
         succ = self.run_test(test_config, 0.01)
@@ -76,7 +78,7 @@ class BingBertSquadFuncTestCase(BaseTestCase):
             "json": "deepscale_bsz24_fp16_config.json",
             "max_steps": 8,
             "max_epoch_steps": 4,
-            "other_args": "--fp16 --print_steps 1",
+            "other_args": "--fp16 --print_steps 1"
         }
 
         succ = self.run_test(test_config, 0.01)
@@ -89,7 +91,7 @@ class BingBertSquadFuncTestCase(BaseTestCase):
             "json": "deepscale_bsz24_fp32_config.json",
             "max_steps": 8,
             "max_epoch_steps": 4,
-            "other_args": "--print_steps 1",
+            "other_args": "--print_steps 1"
         }
 
         succ = self.run_test(test_config, 0.01)
@@ -102,7 +104,7 @@ class BingBertSquadFuncTestCase(BaseTestCase):
             "json": "deepscale_bsz24_fp32_config.json",
             "max_steps": 8,
             "max_epoch_steps": 4,
-            "other_args": "--print_steps 1",
+            "other_args": "--print_steps 1"
         }
 
         succ = self.run_test(test_config, 0.01)
@@ -114,9 +116,8 @@ class BingBertSquadFuncTestCase(BaseTestCase):
 
         prefix = "BingBertSquad_func"
 
-        test_config["other_args"] += f" --max_steps {test_config['max_steps']}"
-        test_config[
-            "other_args"] += f" --max_steps_per_epoch {test_config['max_epoch_steps']}"
+        test_config['other_args'] += f" --max_steps {test_config['max_steps']}"
+        test_config['other_args'] += f" --max_steps_per_epoch {test_config['max_epoch_steps']}"
 
         # baseline run...
         test_config["deepscale"] = False
@@ -163,14 +164,14 @@ class BingBertSquadFuncTestCase(BaseTestCase):
 
 def suite():
     suite = unittest.TestSuite()
-    suite.addTest(BingBertSquadFuncTestCase("test_gpu4_fp16"))
-    suite.addTest(BingBertSquadFuncTestCase("test_gpu4_fp16_zero2"))
-    suite.addTest(BingBertSquadFuncTestCase("test_gpu1_fp16"))
-    suite.addTest(BingBertSquadFuncTestCase("test_gpu4_fp32"))
-    suite.addTest(BingBertSquadFuncTestCase("test_gpu1_fp32"))
+    suite.addTest(BingBertSquadFuncTestCase('test_gpu4_fp16'))
+    suite.addTest(BingBertSquadFuncTestCase('test_gpu4_fp16_zero2'))
+    suite.addTest(BingBertSquadFuncTestCase('test_gpu1_fp16'))
+    suite.addTest(BingBertSquadFuncTestCase('test_gpu4_fp32'))
+    suite.addTest(BingBertSquadFuncTestCase('test_gpu1_fp32'))
     return suite
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     runner = unittest.TextTestRunner(failfast=True)
     runner.run(suite())

@@ -1,27 +1,28 @@
 ---
 title: "CIFAR-10 Tutorial"
 excerpt: "Train your first model with DeepScale!"
+tags: getting-started
 ---
 
 If you haven't already, we advise you to first read through the
 [Getting Started](/getting-started/) guide before stepping through this
 tutorial.
 
-In this tutorial we will be adding DeepScale to CIFAR-10 model, which is small image classification model.
+In this tutorial we will be adding DeepScale to the CIFAR-10 model, which is a small image classification model.
 
-First we will go over how to run original CIFAR-10. Then we will proceed step-by-step in enabling this model to run with DeepScale.
+First we will go over how to run the original CIFAR-10 model. Then we will proceed step-by-step in enabling this model to run with DeepScale.
 
 
 
 ## Running Original CIFAR-10
 
-Original model code from [CIFAR-10 Tutorial](https://github.com/pytorch/tutorials/blob/master/beginner_source/blitz/cifar10_tutorial.py), We've copied this repo under [DeepScaleExamples/cifar/](https://github.com/khulnasoft-lab/DeepScaleExamples/tree/master/cifar) and made it available as a submodule. To download, execute:
+Original model code from the [CIFAR-10 Tutorial](https://github.com/pytorch/tutorials/blob/main/beginner_source/blitz/cifar10_tutorial.py), We've copied this repo under [DeepScaleExamples/training/cifar/](https://github.com/khulnasoft/DeepScaleExamples/tree/master/training/cifar) and made it available as a submodule. To download, execute:
 
 ```bash
 git submodule update --init --recursive
 ```
 
-To install requirements for CIFAR-10:
+To install the requirements for the CIFAR-10 model:
 ```bash
 cd DeepScaleExamples/cifar
 pip install -r requirements.txt
@@ -81,14 +82,14 @@ The first step to apply DeepScale is adding DeepScale arguments to CIFAR-10 mode
 
      parser=argparse.ArgumentParser(description='CIFAR')
 
-     #data
-     # cuda
+     # Data.
+     # Cuda.
      parser.add_argument('--with_cuda', default=False, action='store_true',
                          help='use CPU in case there\'s no GPU support')
      parser.add_argument('--use_ema', default=False, action='store_true',
                          help='whether use exponential moving average')
 
-     # train
+     # Train.
      parser.add_argument('-b', '--batch_size', default=32, type=int,
                          help='mini-batch size (default: 32)')
      parser.add_argument('-e', '--epochs', default=30, type=int,
@@ -96,7 +97,7 @@ The first step to apply DeepScale is adding DeepScale arguments to CIFAR-10 mode
      parser.add_argument('--local_rank', type=int, default=-1,
                         help='local rank passed from distributed launcher')
 
-     # Include DeepScale configuration arguments
+     # Include DeepScale configuration arguments.
      parser = deepscale.add_config_arguments(parser)
 
      args=parser.parse_args()
@@ -122,16 +123,16 @@ def initialize(args,
                collate_fn=None):
 ```
 
-Here we initialize DeepScale with CIFAR-10 model (`net`), `args`, `parameters` and `trainset`:
+Here we initialize DeepScale with the CIFAR-10 model (`net`), `args`, `parameters` and `trainset`:
 
 ```python
  parameters = filter(lambda p: p.requires_grad, net.parameters())
  args=add_argument()
 
  # Initialize DeepScale to use the following features
- # 1) Distributed model
- # 2) Distributed data loader
- # 3) DeepScale optimizer
+ # 1) Distributed model.
+ # 2) Distributed data loader.
+ # 3) DeepScale optimizer.
  model_engine, optimizer, trainloader, _ = deepscale.initialize(args=args, model=net, model_parameters=parameters, training_data=trainset)
 
 ```
@@ -139,7 +140,8 @@ Here we initialize DeepScale with CIFAR-10 model (`net`), `args`, `parameters` a
 After initializing DeepScale, the original `device` and `optimizer` are removed:
 
 ```python
- #device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+ #from deepscale.accelerator import get_accelerator
+ #device = torch.device(get_accelerator().device_name(0) if get_accelerator().is_available() else "cpu")
  #net.to(device)
 
  #optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
@@ -153,7 +155,7 @@ The `model` returned by `deepscale.initialize` is the _DeepScale Model Engine_ t
 
 ```python
      for i, data in enumerate(trainloader):
-         # get the inputs; data is a list of [inputs, labels]
+         # Get the inputs; data is a list of [inputs, labels].
          inputs = data[0].to(model_engine.device)
          labels = data[1].to(model_engine.device)
 
@@ -204,13 +206,13 @@ The next step to use DeepScale is to create a configuration JSON file (ds_config
 
 ### Run CIFAR-10 Model with DeepScale Enabled
 
-To start training CIFAR-10 model with DeepScale applied, execute the following command, it will use all detected GPUs by default.
+To start training the CIFAR-10 model with DeepScale applied, execute the following command, it will use all detected GPUs by default.
 
 ```bash
 deepscale cifar10_deepscale.py --deepscale_config ds_config.json
 ```
 
-DeepScale usually prints more training details for user to monitor, including training settings, performance statistics and loss trends.
+DeepScale usually prints more training details for the user to monitor, including training settings, performance statistics and loss trends.
 ```
 deepscale.pt cifar10_deepscale.py --deepscale_config ds_config.json
 Warning: Permanently added '[192.168.0.22]:42227' (ECDSA) to the list of known hosts.

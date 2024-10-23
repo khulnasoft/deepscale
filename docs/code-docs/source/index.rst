@@ -19,7 +19,7 @@ Training API
    training
 
 Inference API
-------------
+-------------
 
 .. toctree::
    :maxdepth: 2
@@ -42,7 +42,12 @@ ZeRO API
 
    zero3
 
+Mixture of Experts (MoE)
+------------------------
+.. toctree::
+   :maxdepth: 2
 
+   moe
 
 Transformer Kernel API
 ----------------------
@@ -59,7 +64,7 @@ Pipeline Parallelism
    pipeline
 
 Optimizers
---------------------
+----------
 .. toctree::
    :maxdepth: 2
 
@@ -79,6 +84,12 @@ Flops Profiler
 
    flops-profiler
 
+Autotuning
+--------------------
+.. toctree::
+   :maxdepth: 2
+
+   autotuning
 
 Memory Usage
 ------------------
@@ -86,6 +97,13 @@ Memory Usage
    :maxdepth: 2
 
    memory
+
+Monitoring
+----------
+.. toctree::
+   :maxdepth: 2
+
+   monitor
 
 Indices and tables
 ------------------

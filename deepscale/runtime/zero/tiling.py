@@ -1,3 +1,8 @@
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+# DeepScale Team
+
 import torch
 import deepscale
 from deepscale.runtime.utils import partition_uniform as partition
@@ -25,19 +30,18 @@ def split_tensor_along_last_dim(tensor, partitions, contiguous_split_chunks=Fals
 
 
 class TiledLinear(torch.nn.Module):
-    def __init__(
-        self,
-        in_features,
-        out_features,
-        bias=True,
-        in_splits=1,
-        out_splits=1,
-        input_is_already_split=False,
-        combine_out_splits=True,
-        linear_cls=torch.nn.Linear,
-        init_linear=None,
-        **kwargs,
-    ):
+
+    def __init__(self,
+                 in_features,
+                 out_features,
+                 bias=True,
+                 in_splits=1,
+                 out_splits=1,
+                 input_is_already_split=False,
+                 combine_out_splits=True,
+                 linear_cls=torch.nn.Linear,
+                 init_linear=None,
+                 **kwargs):
         """A replacement for ``torch.nn.Linear`` that works with ZeRO-3 to reduce
         memory requirements via tiling.
 
@@ -77,9 +81,9 @@ class TiledLinear(torch.nn.Module):
         super().__init__()
 
         if (in_splits < 1) or (in_splits > in_features):
-            raise RuntimeError("in splits must be in range [1, in_features].")
+            raise RuntimeError('in splits must be in range [1, in_features].')
         if (out_splits < 1) or (out_splits > out_features):
-            raise RuntimeError("out splits must be in range [1, out_features].")
+            raise RuntimeError('out splits must be in range [1, out_features].')
 
         # global, not necessarily local
         self.in_features = in_features
@@ -110,14 +114,11 @@ class TiledLinear(torch.nn.Module):
             local_out_dim = self.out_parts[out_id + 1] - self.out_parts[out_id]
 
             for in_id in range(in_splits):
-                # if input_size is split, we only need one bias
+                #if input_size is split, we only need one bias
                 local_bias = bias if in_id == (in_splits - 1) else False
 
                 local_in_dim = self.in_parts[in_id + 1] - self.in_parts[in_id]
-                local = linear_cls(local_in_dim,
-                                   local_out_dim,
-                                   bias=local_bias,
-                                   **kwargs)
+                local = linear_cls(local_in_dim, local_out_dim, bias=local_bias, **kwargs)
                 self.linears[out_id].append(local)
 
         # Optionally initialize with a known tensor
@@ -127,15 +128,12 @@ class TiledLinear(torch.nn.Module):
     def forward(self, input_):
         if self.in_splits > 1 and not self.input_is_already_split:
             input_parts = partition(input_.shape[-1], self.in_splits)
-            split_sizes = [
-                input_parts[p + 1] - input_parts[p] for p in range(self.in_splits)
-            ]
+            split_sizes = [input_parts[p + 1] - input_parts[p] for p in range(self.in_splits)]
             inputs = self._split_global_input(input_, split_sizes)
         elif self.in_splits > 1:
             inputs = input_
-            assert (
-                len(inputs) == self.in_splits
-            ), f"Col splits {self.in_splits} does not match input splits {len(inputs)}"
+            assert len(
+                inputs) == self.in_splits, f"Col splits {self.in_splits} does not match input splits {len(inputs)}"
         else:
             # no splits
             inputs = [input_]
@@ -145,12 +143,10 @@ class TiledLinear(torch.nn.Module):
             for in_id in range(self.in_splits):
                 local_output = self.linears[out_id][in_id](inputs[in_id])
 
-                outputs[out_id] = self._reduce_local_output(
-                    in_id=in_id,
-                    out_id=out_id,
-                    current_out=outputs[out_id],
-                    new_out=local_output,
-                )
+                outputs[out_id] = self._reduce_local_output(in_id=in_id,
+                                                            out_id=out_id,
+                                                            current_out=outputs[out_id],
+                                                            new_out=local_output)
 
         if self.combine_out_splits:
             return self._combine_output_splits(outputs)
@@ -190,8 +186,8 @@ class TiledLinear(torch.nn.Module):
         """
 
         if current_out is None:
-            # this clone is necessary to preserve auto grad
-            # there is some issue with inplace update for outputs that are views
+            #this clone is necessary to preserve auto grad
+            #there is some issue with inplace update for outputs that are views
             return new_out.clone()
         else:
             return current_out + new_out
@@ -233,10 +229,10 @@ class TiledLinear(torch.nn.Module):
         Args:
             other (``torch.nn.Linear``): the linear layer to copy from.
         """
-        assert hasattr(other, "weight")
+        assert hasattr(other, 'weight')
         assert other.weight.size() == (self.out_features, self.in_features)
         if self.use_bias:
-            assert hasattr(other, "bias")
+            assert hasattr(other, 'bias')
             assert other.bias is not None
             assert other.bias.size() == (self.out_features, )
         else:
@@ -264,8 +260,9 @@ class TiledLinearReturnBias(TiledLinear):
     """Wrapper for a Linear class that returns its own bias parameter, such as
     used by Megatron-LM.
     """
+
     def _reduce_local_output(self, in_id, out_id, current_out, new_out):
-        """Reduces output tensors, but not the returned bias."""
+        """Reduces output tensors, but not the returned bias. """
         if current_out is not None:
             old_tensor, old_bias = current_out
         else:
@@ -277,10 +274,7 @@ class TiledLinearReturnBias(TiledLinear):
         tensor, bias = new_out
         assert tensor is not None
 
-        tensor = super()._reduce_local_output(in_id=in_id,
-                                              out_id=out_id,
-                                              current_out=old_tensor,
-                                              new_out=tensor)
+        tensor = super()._reduce_local_output(in_id=in_id, out_id=out_id, current_out=old_tensor, new_out=tensor)
 
         if bias is None:
             bias = old_bias

@@ -1,10 +1,10 @@
-"""
-Copyright 2024 The KhulnaSoft DeepScale Team
-Licensed under the MIT license.
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
 
+# DeepScale Team
+"""
 Functionality of swapping optimizer tensors to/from (NVMe) storage devices.
 """
-
 import os
 import argparse
 import json
@@ -15,16 +15,13 @@ from perf_sweep_utils import BENCH_LOG_DIR, READ_LOG_DIR, WRITE_LOG_DIR
 def parse_arguments():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument(
-        "--log_dir",
-        type=str,
-        default=BENCH_LOG_DIR,
-        help=
-        f'Folder of performance sweep logs. Default is {os.path.join(".", BENCH_LOG_DIR)}',
-    )
+    parser.add_argument('--log_dir',
+                        type=str,
+                        default=BENCH_LOG_DIR,
+                        help=f'Folder of performance sweep logs. Default is {os.path.join(".", BENCH_LOG_DIR)}')
 
     args = parser.parse_args()
-    print(f"args = {args}")
+    print(f'args = {args}')
 
     return args
 
@@ -33,7 +30,7 @@ def validate_args(args):
     for d in [READ_LOG_DIR, WRITE_LOG_DIR]:
         log_dir = os.path.join(args.log_dir, d)
         if not os.path.isdir(log_dir):
-            print(f"{log_dir} folder is not existent")
+            print(f'{log_dir} folder is not existent')
             return False
 
     return True
@@ -44,9 +41,9 @@ def convert_to_param(key):
     return {
         "single_submit": "true" if key[0] == "single" else "false",
         "overlap_events": "true" if key[1] == "overlap" else "false",
-        "thread_count": int(key[3]),
-        "queue_depth": int(key[4]),
-        "block_size": int(key[5]),
+        "thread_count": int(key[5]),
+        "queue_depth": int(key[3]),
+        "block_size": int(key[4])
     }
 
 
@@ -76,14 +73,12 @@ def generate_aio_param(read_log_dir, write_log_dir):
     optimal_config_read = read_results.get(read_perf_keys[optimal_key], None)
     optimal_config_write = write_results.get(write_perf_keys[optimal_key], None)
 
-    print(
-        f"Best performance (GB/sec): read = {optimal_config_read:5.2f}, write = {optimal_config_write:5.2f}"
-    )
+    print(f'Best performance (GB/sec): read = {optimal_config_read:5.2f}, write = {optimal_config_write:5.2f}')
     print(json.dumps(aio_param, indent=3))
 
 
 def main():
-    print("Generate aio param")
+    print('Generate aio param')
     args = parse_arguments()
     if not validate_args(args):
         quit()

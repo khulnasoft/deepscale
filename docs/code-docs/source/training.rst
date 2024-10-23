@@ -35,7 +35,7 @@ Gradient Accumulation
 
 Model Saving
 ------------
-.. autofunction:: deepscale.DeepScaleEngine.save_fp16_model
+.. autofunction:: deepscale.DeepScaleEngine.save_16bit_model
 
 
 Additionally when a DeepScale checkpoint is created, a script ``zero_to_fp32.py`` is added there which can be used to reconstruct fp32 master weights into a single pytorch ``state_dict`` file.

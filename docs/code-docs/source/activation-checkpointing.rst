@@ -6,11 +6,11 @@ of memory optimizations relating to activation checkpointing. These include
 activation partitioning across GPUs when using model parallelism, CPU
 checkpointing, contiguous memory optimizations, etc.
 
-Please see the `DeepScale JSON config <https://www.deepscale.khulnasoft.com/docs/config-json/>`_
+Please see the `DeepScale JSON config <https://www.deepscale.ai/docs/config-json/>`_
 for the full set.
 
 Here we present the activation checkpointing API. Please see the enabling
-DeepScale for `Megatron-LM tutorial <https://www.deepscale.khulnasoft.com/tutorials/megatron/>`_
+DeepScale for `Megatron-LM tutorial <https://www.deepscale.ai/tutorials/megatron/>`_
 for example usage.
 
 Configuring Activation Checkpointing

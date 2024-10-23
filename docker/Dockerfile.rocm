@@ -1,0 +1,5 @@
+FROM rocm/pytorch:latest
+
+# install latest released version of deepscale
+RUN pip install deepscale && \
+    ds_report

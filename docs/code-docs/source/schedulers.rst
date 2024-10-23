@@ -1,7 +1,7 @@
 Learning Rate Schedulers
 ===================
 
-DeepScale offers implementations of ``LRRangeTest``, ``OneCycle``, ``WarmupLR``, ``WarmupDecayLR`` learning rate schedulers. When using a DeepScale's learning rate scheduler (specified in the `ds_config.json` file), DeepScale calls the `step()` method of the scheduler at every training step (when `model_engine.step()` is executed). When not using a DeepScale's learning rate scheduler:
+DeepScale offers implementations of ``LRRangeTest``, ``OneCycle``, ``WarmupLR``, ``WarmupDecayLR``, ``WarmupCosineLR`` learning rate schedulers. When using a DeepScale's learning rate scheduler (specified in the `ds_config.json` file), DeepScale calls the `step()` method of the scheduler at every training step (when `model_engine.step()` is executed). When not using a DeepScale's learning rate scheduler:
   * if the schedule is supposed to execute at every training step, then the user can pass the scheduler to `deepscale.initialize` when initializing the DeepScale engine and let DeepScale manage it for update or save/restore.
   * if the schedule is supposed to execute at any other interval (e.g., training epochs), then the user should NOT pass the scheduler to DeepScale during initialization and must manage it explicitly.
 
@@ -23,3 +23,8 @@ WarmupLR
 WarmupDecayLR
 ---------------------------
 .. autoclass:: deepscale.runtime.lr_schedules.WarmupDecayLR
+
+
+WarmupCosineLR
+---------------------------
+.. autoclass:: deepscale.runtime.lr_schedules.WarmupCosineLR

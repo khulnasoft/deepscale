@@ -1,7 +1,9 @@
-/*
-Copyright 2024 The KhulnaSoft DeepScale Team
-Licensed under the MIT license.
+// Copyright (c) Microsoft Corporation.
+// SPDX-License-Identifier: Apache-2.0
 
+// DeepScale Team
+
+/*
 Functionality for swapping optimizer tensors to/from (NVMe) storage devices.
 */
 
@@ -33,4 +35,4 @@ int regular_read(const char* filename, std::vector<char>& buffer);
 bool validate_aio_operation(const bool read_op,
                             const char* filename,
                             void* aio_buffer,
-                            const long long int num_bytes);
+                            const int64_t num_bytes);

@@ -1,3 +1,8 @@
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+# DeepScale Team
+
 import torch
 
 import deepscale
@@ -8,30 +13,27 @@ import deepscale
 
 
 class VerboseLinear(torch.nn.Linear):
+
     def __init__(self, **kwargs):
-        print(f"Begin VerboseLinear.__init__")
+        print(f'Begin VerboseLinear.__init__')
         super().__init__(**kwargs)
-        print(f"End VerboseLinear.__init__")
+        print(f'End VerboseLinear.__init__')
 
 
 class LinearStack(torch.nn.Module):
+
     def __init__(self, input_dim=2, hidden_dim=4, output_dim=4, num_layers=2):
         super().__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.hidden_dim = hidden_dim
 
-        self.input_layer = VerboseLinear(in_features=self.input_dim,
-                                         out_features=self.hidden_dim)
+        self.input_layer = VerboseLinear(in_features=self.input_dim, out_features=self.hidden_dim)
         self.layers = torch.nn.ModuleList([
-            torch.nn.Linear(
-                in_features=self.hidden_dim,
-                out_features=self.hidden_dim,
-                bias=False,
-            ) for x in range(num_layers)
+            torch.nn.Linear(in_features=self.hidden_dim, out_features=self.hidden_dim, bias=False)
+            for x in range(num_layers)
         ])
-        self.output_layer = torch.nn.Linear(in_features=self.hidden_dim,
-                                            out_features=self.output_dim)
+        self.output_layer = torch.nn.Linear(in_features=self.hidden_dim, out_features=self.output_dim)
         self.identity = torch.nn.Identity()
 
     def forward(self, x):
@@ -50,7 +52,7 @@ class LinearStack(torch.nn.Module):
 
 def test_driver():
     print()
-    print("BUILDING MODEL")
+    print('BUILDING MODEL')
     with deepscale.zero.Init():
         model = LinearStack()
     print()
@@ -70,7 +72,7 @@ def test_driver():
     test_input.requires_grad = False
 
     print()
-    print("BEGINNING FORWARD")
+    print('BEGINNING FORWARD')
     print()
 
     output = model(test_input)
@@ -82,7 +84,7 @@ def test_driver():
     # print('full:' , not_parted)
     # print()
 
-    # samyamspeed.disable()
+    #samyamspeed.disable()
 
 
 test_driver()

@@ -1,35 +1,16 @@
-/*
-Copyright 2024 The KhulnaSoft DeepScale Team
-Licensed under the MIT license.
+// Copyright (c) Microsoft Corporation.
+// SPDX-License-Identifier: Apache-2.0
 
+// DeepScale Team
+
+/*
 Functionality for swapping optimizer tensors to/from (NVMe) storage devices.
 */
 
 #include <condition_variable>
 #include <memory>
 #include <queue>
-#include "deepscale_py_aio.h"
-
-struct io_op_desc_t {
-    const bool _read_op;
-    torch::Tensor _buffer;
-    int _fd;
-    const std::string _filename;
-    const long long int _num_bytes;
-    torch::Tensor _cpu_buffer;
-    torch::Tensor _contiguous_buffer;
-    const bool _validate;
-
-    io_op_desc_t(const bool read_op,
-                 const torch::Tensor& buffer,
-                 const int fd,
-                 const char* filename,
-                 const long long int num_bytes,
-                 const bool validate);
-
-    char* data_ptr() const;
-    void fini();
-};
+#include "deepscale_cpu_op.h"
 
 struct thread_sync_t {
     std::mutex _mutex;

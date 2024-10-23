@@ -1,13 +1,14 @@
-"""
-Copyright 2024 The KhulnaSoft DeepScale Team
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
 
+# DeepScale Team
+"""
 Copyright NVIDIA/apex
 This file is adapted from NVIDIA/apex/optimizer/fused_adam and implements the LAMB optimizer
 """
-
 import types
 import torch
-from ..op_builder import FusedLambBuilder
+from deepscale.ops.op_builder import FusedLambBuilder
 
 
 class FusedLamb(torch.optim.Optimizer):
@@ -36,45 +37,36 @@ class FusedLamb(torch.optim.Optimizer):
         min_coeff(float, optional): minimum value of the lamb coefficient (default: 0.01)
         amsgrad (boolean, optional): NOT SUPPORTED in FusedLamb!
     """
-    def __init__(
-        self,
-        params,
-        lr=1e-3,
-        bias_correction=True,
-        betas=(0.9,
-               0.999),
-        eps=1e-8,
-        eps_inside_sqrt=False,
-        weight_decay=0.0,
-        max_grad_norm=0.0,
-        max_coeff=10.0,
-        min_coeff=0.01,
-        amsgrad=False,
-    ):
+
+    def __init__(self,
+                 params,
+                 lr=1e-3,
+                 bias_correction=True,
+                 betas=(0.9, 0.999),
+                 eps=1e-8,
+                 eps_inside_sqrt=False,
+                 weight_decay=0.,
+                 max_grad_norm=0.,
+                 max_coeff=10.0,
+                 min_coeff=0.01,
+                 amsgrad=False):
         self.fused_lamb_cuda = FusedLambBuilder().load()
 
         if amsgrad:
-            raise RuntimeError("FusedLamb does not support the AMSGrad variant.")
-        defaults = dict(
-            lr=lr,
-            bias_correction=bias_correction,
-            betas=betas,
-            eps=eps,
-            weight_decay=weight_decay,
-            max_grad_norm=max_grad_norm,
-            max_coeff=max_coeff,
-            min_coeff=min_coeff,
-        )
+            raise RuntimeError('FusedLamb does not support the AMSGrad variant.')
+        defaults = dict(lr=lr,
+                        bias_correction=bias_correction,
+                        betas=betas,
+                        eps=eps,
+                        weight_decay=weight_decay,
+                        max_grad_norm=max_grad_norm,
+                        max_coeff=max_coeff,
+                        min_coeff=min_coeff)
         super(FusedLamb, self).__init__(params, defaults)
         self.eps_mode = 0 if eps_inside_sqrt else 1
         self.lamb_coeffs = []
 
-    def step(self,
-             closure=None,
-             grads=None,
-             output_params=None,
-             scale=1.0,
-             grad_norms=None):
+    def step(self, closure=None, grads=None, output_params=None, scale=1., grad_norms=None):
         """Performs a single optimization step.
 
         Arguments:
@@ -116,85 +108,64 @@ class FusedLamb(torch.optim.Optimizer):
         if grad_norms is None:
             grad_norms = [None] * len(self.param_groups)
 
-        # remove the previous coeffs
+        #remove the previous coeffs
         del self.lamb_coeffs[:]
 
         for group, grads_this_group, output_params_this_group, grad_norm_group in zip(
-            self.param_groups, grads_group, output_params_group, grad_norms
-        ):
+                self.param_groups, grads_group, output_params_group, grad_norms):
             if grads_this_group is None:
-                grads_this_group = [None] * len(group["params"])
+                grads_this_group = [None] * len(group['params'])
             if output_params_this_group is None:
-                output_params_this_group = [None] * len(group["params"])
+                output_params_this_group = [None] * len(group['params'])
 
             if grad_norm_group is None:
-                grad_norm_group = [None] * len(group["params"])
+                grad_norm_group = [None] * len(group['params'])
             elif not isinstance(grad_norm_group, list):
                 grad_norm_group = [grad_norm_group]
 
-            bias_correction = 1 if group["bias_correction"] else 0
+            bias_correction = 1 if group['bias_correction'] else 0
 
-            for p, grad, output_param, grad_norm in zip(
-                group["params"],
-                grads_this_group,
-                output_params_this_group,
-                grad_norm_group,
-            ):
+            for p, grad, output_param, grad_norm in zip(group['params'], grads_this_group, output_params_this_group,
+                                                        grad_norm_group):
 
                 # compute combined scale factor for this group
                 combined_scale = scale
-                if group["max_grad_norm"] > 0:
+                if group['max_grad_norm'] > 0:
                     # norm is in fact norm*scale
-                    clip = ((grad_norm / scale) + 1e-6) / group["max_grad_norm"]
+                    clip = ((grad_norm / scale) + 1e-6) / group['max_grad_norm']
                     if clip > 1:
                         combined_scale = clip * scale
 
-                # note: p.grad should not ever be set for correct operation of mixed precision optimizer that sometimes sends None gradients
+                #note: p.grad should not ever be set for correct operation of mixed precision optimizer that sometimes sends None gradients
                 if p.grad is None and grad is None:
                     continue
                 if grad is None:
                     grad = p.grad.data
                 if grad.is_sparse:
-                    raise RuntimeError("FusedLamb does not support sparse gradients")
+                    raise RuntimeError('FusedLamb does not support sparse gradients')
 
                 state = self.state[p]
 
                 # State initialization
                 if len(state) == 0:
-                    state["step"] = 0
+                    state['step'] = 0
                     # Exponential moving average of gradient values
-                    state["exp_avg"] = torch.zeros_like(p.data)
+                    state['exp_avg'] = torch.zeros_like(p.data)
                     # Exponential moving average of squared gradient values
-                    state["exp_avg_sq"] = torch.zeros_like(p.data)
+                    state['exp_avg_sq'] = torch.zeros_like(p.data)
 
-                exp_avg, exp_avg_sq = state["exp_avg"], state["exp_avg_sq"]
-                beta1, beta2 = group["betas"]
-                max_coeff = group["max_coeff"]
-                min_coeff = group["min_coeff"]
+                exp_avg, exp_avg_sq = state['exp_avg'], state['exp_avg_sq']
+                beta1, beta2 = group['betas']
+                max_coeff = group['max_coeff']
+                min_coeff = group['min_coeff']
 
-                state["step"] += 1
+                state['step'] += 1
 
-                out_p = (torch.tensor([],
-                                      dtype=torch.float)
-                         if output_param is None else output_param)
-                lamb_coeff = self.fused_lamb_cuda.lamb(
-                    p.data,
-                    out_p,
-                    exp_avg,
-                    exp_avg_sq,
-                    grad,
-                    group["lr"],
-                    beta1,
-                    beta2,
-                    max_coeff,
-                    min_coeff,
-                    group["eps"],
-                    combined_scale,
-                    state["step"],
-                    self.eps_mode,
-                    bias_correction,
-                    group["weight_decay"],
-                )
+                out_p = torch.tensor([], dtype=torch.float) if output_param is None else output_param
+                lamb_coeff = self.fused_lamb_cuda.lamb(p.data, out_p, exp_avg, exp_avg_sq, grad, group['lr'], beta1,
+                                                       beta2, max_coeff, min_coeff, group['eps'], combined_scale,
+                                                       state['step'], self.eps_mode, bias_correction,
+                                                       group['weight_decay'])
                 self.lamb_coeffs.append(lamb_coeff)
         return loss
 

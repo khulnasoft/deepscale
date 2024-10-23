@@ -1,21 +1,16 @@
-"""
-Copyright 2024 The KhulnaSoft DeepScale Team
-Licensed under the MIT license.
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
 
+# DeepScale Team
+"""
 Functionality of swapping tensors to/from (NVMe) storage devices.
 """
 
-import os
 import torch
 from deepscale.utils.logging import logger
+from deepscale.accelerator import get_accelerator
 
-from deepscale.runtime.swap_tensor.constants import (
-    AIO_BLOCK_SIZE,
-    AIO_QUEUE_DEPTH,
-    AIO_THREAD_COUNT,
-    AIO_SINGLE_SUBMIT,
-    AIO_OVERLAP_EVENTS,
-)
+from deepscale import comm as dist
 
 MIN_AIO_BYTES = 1024**2
 AIO_ALIGNED_BYTES = 1024
@@ -23,23 +18,24 @@ AIO_ALIGNED_BYTES = 1024
 
 def swap_in_tensors(swap_handle, tensor_buffers, swap_paths):
     for buffer, path in zip(tensor_buffers, swap_paths):
-        assert swap_handle.async_pread(buffer, path) == 0
+        assert (swap_handle.async_pread(buffer, path) == 0)
 
 
 def swap_out_tensors(swap_handle, tensor_buffers, swap_paths):
     for buffer, path in zip(tensor_buffers, swap_paths):
-        assert swap_handle.async_pwrite(buffer, path) == 0
+        assert (swap_handle.async_pwrite(buffer, path) == 0)
 
 
 def print_object(obj, name, exclude_list=[]):
-    logger.info("{}:".format(name))
+    logger.info('{}:'.format(name))
     for arg in sorted(vars(obj)):
         if not arg in exclude_list:
-            dots = "." * (29 - len(arg))
-            logger.info("  {} {} {}".format(arg, dots, getattr(obj, arg)))
+            dots = '.' * (29 - len(arg))
+            logger.info('  {} {} {}'.format(arg, dots, getattr(obj, arg)))
 
 
 class SwapBuffer(object):
+
     def __init__(self, buffer):
         self.buffer = buffer
         self.reset()
@@ -52,9 +48,7 @@ class SwapBuffer(object):
         self.num_elem = 0
 
     def insert_tensor(self, tensor, swap_path, aligned_numel):
-        swap_tensor, compute_tensor = self.allocate_tensor(
-            swap_path, tensor.numel(), aligned_numel
-        )
+        swap_tensor, compute_tensor = self.allocate_tensor(swap_path, tensor.numel(), aligned_numel)
         compute_tensor.data.copy_(tensor.data)
         return swap_tensor, compute_tensor
 
@@ -100,8 +94,9 @@ class SwapBuffer(object):
 
 
 class SwapBufferPool(object):
+
     def __init__(self, buffers):
-        assert all([buf.is_pinned() for buf in buffers])
+        assert all([get_accelerator().is_pinned(buf) for buf in buffers])
         self.buffers = [SwapBuffer(buf) for buf in buffers]
         self.current_index = 0
 
@@ -112,18 +107,14 @@ class SwapBufferPool(object):
 
     def allocate_tensor(self, numel, swap_path, aligned_numel):
         if self.has_space(aligned_numel):
-            swap_tensor, compute_tensor = self._get_current_buffer().allocate_tensor(
-                swap_path, numel, aligned_numel
-            )
+            swap_tensor, compute_tensor = self._get_current_buffer().allocate_tensor(swap_path, numel, aligned_numel)
             return swap_tensor, compute_tensor
 
         return None, None
 
     def insert_tensor(self, tensor, swap_path, aligned_numel):
         if self.has_space(aligned_numel):
-            swap_tensor, compute_tensor = self._get_current_buffer().insert_tensor(
-                tensor, swap_path, aligned_numel
-            )
+            swap_tensor, compute_tensor = self._get_current_buffer().insert_tensor(tensor, swap_path, aligned_numel)
             return swap_tensor, compute_tensor
 
         return None, None
@@ -187,23 +178,22 @@ class SwapBufferPool(object):
 
 
 class SwapBufferManager(object):
+
     def __init__(self, num_elems, count, dtype):
         self.num_elems = num_elems
         self.count = count
         self.dtype = dtype
         self.all_buffers = [
-            torch.zeros(num_elems,
-                        device="cpu",
-                        dtype=dtype).pin_memory() for _ in range(count)
+            get_accelerator().pin_memory(torch.zeros(num_elems, device='cpu', dtype=dtype), align_bytes=0)
+            for _ in range(count)
         ]
         self.free_buffer_index = [i for i in range(count)]
         self.used_buffer_index = {}
-        self.gigabytes = (self.all_buffers[0].element_size() * num_elems * count) / (1024
-                                                                                     **3)
+        self.gigabytes = (self.all_buffers[0].element_size() * num_elems * count) / (1024**3)
 
-        if torch.distributed.get_rank() == 0:
-            exclude_list = ["all_buffers"]
-            print_object(obj=self, name="SwapBufferManager", exclude_list=exclude_list)
+        if dist.get_rank() == 0:
+            exclude_list = ['all_buffers']
+            print_object(obj=self, name='SwapBufferManager', exclude_list=exclude_list)
 
     def allocate(self, num_elems, count, dtype):
         assert dtype == self.dtype
@@ -222,9 +212,7 @@ class SwapBufferManager(object):
         return buffers
 
     def allocate_all(self, num_elems, dtype):
-        return self.allocate(num_elems=num_elems,
-                             count=len(self.free_buffer_index),
-                             dtype=dtype)
+        return self.allocate(num_elems=num_elems, count=len(self.free_buffer_index), dtype=dtype)
 
     def free(self, buffers):
         buffer_ids = []
@@ -235,21 +223,18 @@ class SwapBufferManager(object):
 
         for b_id in buffer_ids:
             self.free_buffer_index.append(self.used_buffer_index[b_id])
-            del self.used_buffer_index[b_id]
+            del (self.used_buffer_index[b_id])
 
 
 def get_sized_buffer(buffer, num_elems):
-    assert (
-        num_elems <= buffer.numel()
-    ), f"num_elems {num_elems} > buffer {buffer.numel()}"
+    assert num_elems <= buffer.numel(), \
+        f'num_elems {num_elems} > buffer {buffer.numel()}'
     return buffer.narrow(0, 0, num_elems) if num_elems < buffer.numel() else buffer
 
 
 def get_sized_buffers(buffer_list, num_elems_list):
     swap_buffers = [
-        get_sized_buffer(buffer,
-                         num_elems) for buffer,
-        num_elems in zip(buffer_list,
-                         num_elems_list)
+        get_sized_buffer(buffer, num_elems) \
+        for buffer, num_elems in zip(buffer_list, num_elems_list)
     ]
     return swap_buffers

@@ -1,20 +1,23 @@
-"""
-Copyright 2024 The KhulnaSoft DeepScale Team.
-Licensed under the MIT license.
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
 
+# DeepScale Team
+"""
 Functionality of swapping tensors to/from (NVMe) storage devices.
 """
-
 import torch
 
+from deepscale import comm as dist
 from deepscale.utils.logging import logger
 from deepscale.runtime.swap_tensor.utils import swap_out_tensors, SwapBuffer
+from deepscale.accelerator import get_accelerator
 
 INVALID_BUFFER_INDEX = -1
-ASYNC_SWAPPER_WAIT_TIMER = "async_swap_gradient_wait"
+ASYNC_SWAPPER_WAIT_TIMER = 'async_swap_gradient_wait'
 
 
 class AsyncTensorSwapper(object):
+
     def __init__(self, aio_handle, numel_alignment, timers):
         self.free_buffer_index = []
         self.swapping_buffer_index = []
@@ -35,7 +38,7 @@ class AsyncTensorSwapper(object):
 
     def add_buffers(self, buffer_list):
         assert len(self.all_buffers) == 0
-        assert all([buffer.is_pinned() for buffer in buffer_list])
+        assert all([get_accelerator().is_pinned(buffer) for buffer in buffer_list])
         dtype = buffer_list[0].dtype
         assert all([buffer.dtype == dtype for buffer in buffer_list])
 
@@ -49,9 +52,9 @@ class AsyncTensorSwapper(object):
         return list(self.timer_names)
 
     def release_buffers(self):
-        self._report_statistics("Swapped out[Before flush]")
+        self._report_statistics('Swapped out[Before flush]')
         self._flush_buffers_until_complete()
-        self._report_statistics("Swapped out[After flush]")
+        self._report_statistics('Swapped out[After flush]')
 
         pinned_buffers = [buf.buffer for buf in self.all_buffers]
         self.all_buffers = []
@@ -67,12 +70,10 @@ class AsyncTensorSwapper(object):
             self._swap_out_tensor(tensor, swap_path)
 
     def _report_statistics(self, message):
-        if torch.distributed.get_rank() == 0:
+        if dist.get_rank() == 0:
             element_size = torch.tensor([], dtype=self.dtype).element_size()
             swapped_GB = (self.num_elements_swapped * element_size) / (1024**3)
-            logger.info(
-                f"{message} num_elems = {self.num_elements_swapped}, {swapped_GB:5.2f} GB"
-            )
+            logger.debug(f'{message} num_elems = {self.num_elements_swapped}, {swapped_GB:5.2f} GB')
 
     def _swap_out_tensor(self, tensor, swap_path):
         assert len(self.all_buffers) > 0

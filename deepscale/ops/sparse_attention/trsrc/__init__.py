@@ -1,8 +1,13 @@
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+# DeepScale Team
+
 import sys
 import os
 
 
-def _build_file_index(directory, suffix=".tr"):
+def _build_file_index(directory, suffix='.tr'):
     """Build an index of source files and their basenames in a given directory.
 
     Args:
@@ -28,5 +33,5 @@ def _build_file_index(directory, suffix=".tr"):
 _module = sys.modules[_build_file_index.__module__]
 _directory = os.path.dirname(os.path.realpath(__file__))
 for name, fname in _build_file_index(_directory):
-    with open(fname, "r") as fin:
+    with open(fname, 'r') as fin:
         setattr(_module, name, fin.read())

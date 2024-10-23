@@ -1,12 +1,13 @@
-# coding=utf-8
-# Copyright (c) 2024, The KhulnaSoft DeepScale Team. All rights reserved.
-#
-# Note: please copy webtext data to "Megatron-LM" folder, before running this script.
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: Apache-2.0
+
+# DeepScale Team
+"""
+Note: please copy webtext data to "Megatron-LM" folder, before running this script.
+"""
 
 import unittest
-import subprocess
 import os
-import time
 import re
 from .test_common import BaseTestCase
 
@@ -19,11 +20,11 @@ MASTER_PORT = 29700
 
 def grep_loss_from_file(file_name):
     loss = 0.0
-    print(f"grepping {file_name}")
-    with open(file_name, "r") as f:
+    print(f'grepping {file_name}')
+    with open(file_name, 'r') as f:
         lines = f.readlines()
         line_filter = "validation loss at the end of training for test data | LM loss:"
-        match_number = re.compile("LM loss: ([-+]?[0-9]+\.?[0-9]*(?:[Ee][-+]?[0-9]+)?)")
+        match_number = re.compile(r'LM loss: ([-+]?[0-9]+\.?[0-9]*(?:[Ee][-+]?[0-9]+)?)')
 
         for line in lines:
             if line_filter in line:
@@ -37,6 +38,7 @@ def grep_loss_from_file(file_name):
 
 
 class GPT2FuncTestCase(BaseTestCase):
+
     def __init__(self, methodName="DeepScale function test on GPT2 model"):
         super(GPT2FuncTestCase, self).__init__(methodName)
 
@@ -456,10 +458,8 @@ class GPT2FuncTestCase(BaseTestCase):
             baseline_prefix += test_config["json"][0:-5]
             baseline_deepscale_config = True
 
-        test_config["other_args"] = f'"{cpu_optimizer_flag}"'
-        base_file = self.gen_output_name(test_config,
-                                         baseline_prefix,
-                                         baseline_config=baseline_deepscale_config)
+        test_config["other_args"] = f"\"{cpu_optimizer_flag}\""
+        base_file = self.gen_output_name(test_config, baseline_prefix, baseline_config=baseline_deepscale_config)
 
         # skip baseline run if it exists.
         if not self.has_loss_data(base_file):
@@ -471,8 +471,7 @@ class GPT2FuncTestCase(BaseTestCase):
         # DeepScale run...
         test_config["deepscale"] = True
         cpu_optimizer_flag = self.gen_cpu_optimizer_flag(test_config, False)
-        test_config["other_args"] = (
-            f'"--deepscale-activation-checkpointing {cpu_optimizer_flag}"')
+        test_config["other_args"] = f"\"--deepscale-activation-checkpointing {cpu_optimizer_flag}\""
         test_config["json"] = deepscale_config
 
         print("{0}: DeepScale run.".format(self.id()))
@@ -502,12 +501,10 @@ class GPT2FuncTestCase(BaseTestCase):
             baseline_prefix = prefix + test_config["json"][0:-5]
             baseline_deepscale_config = True
 
-        test_config["other_args"] = f'"{cpu_optimizer_flag}"'
+        test_config["other_args"] = f"\"{cpu_optimizer_flag}\""
 
         # baseline run...
-        base_file = self.gen_output_name(test_config,
-                                         baseline_prefix,
-                                         baseline_config=baseline_deepscale_config)
+        base_file = self.gen_output_name(test_config, baseline_prefix, baseline_config=baseline_deepscale_config)
 
         # skip baseline run if it exists.
         if not self.has_loss_data(base_file):
@@ -519,7 +516,7 @@ class GPT2FuncTestCase(BaseTestCase):
         # DeepScale run...
         test_config["deepscale"] = True
         cpu_optimizer_flag = self.gen_cpu_optimizer_flag(test_config, False)
-        test_config["other_args"] = f'"{cpu_optimizer_flag}"'
+        test_config["other_args"] = f"\"{cpu_optimizer_flag}\""
 
         print("{0}: DeepScale run.".format(self.id()))
         test_file = self.gen_output_name(test_config, prefix)
@@ -551,13 +548,12 @@ class GPT2FuncTestCase(BaseTestCase):
         return True
 
     def gen_cpu_optimizer_flag(self, test_config, is_baseline):
-        if "cpu_optimizer" in test_config and test_config["cpu_optimizer"]:
+        if 'cpu_optimizer' in test_config and test_config['cpu_optimizer']:
             cpu_optimizer_flag = "--cpu-optimizer"
             if is_baseline:
                 cpu_optimizer_flag += " --cpu_torch_adam"
                 return cpu_optimizer_flag
-            if ("test_torch_offload" in test_config
-                    and test_config["test_torch_offload"]):
+            if 'test_torch_offload' in test_config and test_config['test_torch_offload']:
                 cpu_optimizer_flag += " --cpu_torch_adam"
                 return cpu_optimizer_flag
         else:
@@ -569,39 +565,39 @@ class GPT2FuncTestCase(BaseTestCase):
 def suite():
     suite = unittest.TestSuite()
 
-    suite.addTest(GPT2FuncTestCase("test_mp1_gpu2_node1_fp16"))
+    suite.addTest(GPT2FuncTestCase('test_mp1_gpu2_node1_fp16'))
 
     # Baseline = Megatron + Torch.Optim.Adam
     # Test = Megatron + Torch.Optim.Adam + ZeRO-Offload
-    suite.addTest(GPT2FuncTestCase("test_mp1_gpu1_node1_zero2_torch_offload"))
-    suite.addTest(GPT2FuncTestCase("test_mp1_gpu2_node1_zero2_torch_offload"))
-    suite.addTest(GPT2FuncTestCase("test_mp2_gpu4_node1_zero2_torch_offload"))
-    suite.addTest(GPT2FuncTestCase("test_mp4_gpu4_node1_zero2_torch_offload"))
+    suite.addTest(GPT2FuncTestCase('test_mp1_gpu1_node1_zero2_torch_offload'))
+    suite.addTest(GPT2FuncTestCase('test_mp1_gpu2_node1_zero2_torch_offload'))
+    suite.addTest(GPT2FuncTestCase('test_mp2_gpu4_node1_zero2_torch_offload'))
+    suite.addTest(GPT2FuncTestCase('test_mp4_gpu4_node1_zero2_torch_offload'))
 
     # Baseline = Megatron + Torch.Optim.Adam
     # Test = Megatron + DeepScaleAdam + ZeRO-Offload
-    suite.addTest(GPT2FuncTestCase("test_mp1_gpu1_node1_zero2_ds_offload"))
-    suite.addTest(GPT2FuncTestCase("test_mp1_gpu2_node1_zero2_ds_offload"))
-    suite.addTest(GPT2FuncTestCase("test_mp2_gpu4_node1_zero2_ds_offload"))
-    suite.addTest(GPT2FuncTestCase("test_mp4_gpu4_node1_zero2_ds_offload"))
+    suite.addTest(GPT2FuncTestCase('test_mp1_gpu1_node1_zero2_ds_offload'))
+    suite.addTest(GPT2FuncTestCase('test_mp1_gpu2_node1_zero2_ds_offload'))
+    suite.addTest(GPT2FuncTestCase('test_mp2_gpu4_node1_zero2_ds_offload'))
+    suite.addTest(GPT2FuncTestCase('test_mp4_gpu4_node1_zero2_ds_offload'))
 
-    suite.addTest(GPT2FuncTestCase("test_mp1_gpu1_node1_zero1"))
-    suite.addTest(GPT2FuncTestCase("test_mp1_gpu2_node1_zero1"))
-    suite.addTest(GPT2FuncTestCase("test_mp2_gpu4_node1_zero1"))
-    suite.addTest(GPT2FuncTestCase("test_mp4_gpu4_node1_zero1"))
+    suite.addTest(GPT2FuncTestCase('test_mp1_gpu1_node1_zero1'))
+    suite.addTest(GPT2FuncTestCase('test_mp1_gpu2_node1_zero1'))
+    suite.addTest(GPT2FuncTestCase('test_mp2_gpu4_node1_zero1'))
+    suite.addTest(GPT2FuncTestCase('test_mp4_gpu4_node1_zero1'))
 
-    suite.addTest(GPT2FuncTestCase("test_mp1_gpu1_node1_zero2"))
-    suite.addTest(GPT2FuncTestCase("test_mp1_gpu2_node1_zero2"))
-    suite.addTest(GPT2FuncTestCase("test_mp2_gpu4_node1_zero2"))
-    suite.addTest(GPT2FuncTestCase("test_mp4_gpu4_node1_zero2"))
+    suite.addTest(GPT2FuncTestCase('test_mp1_gpu1_node1_zero2'))
+    suite.addTest(GPT2FuncTestCase('test_mp1_gpu2_node1_zero2'))
+    suite.addTest(GPT2FuncTestCase('test_mp2_gpu4_node1_zero2'))
+    suite.addTest(GPT2FuncTestCase('test_mp4_gpu4_node1_zero2'))
 
-    suite.addTest(GPT2FuncTestCase("test_mp2_gpu4_node1_zero2_gas"))
+    suite.addTest(GPT2FuncTestCase('test_mp2_gpu4_node1_zero2_gas'))
 
-    suite.addTest(GPT2FuncTestCase("test_optimizer_scheduler"))
+    suite.addTest(GPT2FuncTestCase('test_optimizer_scheduler'))
 
     return suite
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     runner = unittest.TextTestRunner(failfast=True)
     runner.run(suite())
