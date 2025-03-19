@@ -1,12 +1,3 @@
-[![License Apache 2.0](https://badgen.net/badge/license/apache2.0/blue)](https://github.com/Microsoft/DeepScale/blob/master/LICENSE)
-[![PyPI version](https://badge.fury.io/py/deepscale.svg)](https://pypi.org/project/deepscale/)
-[![Downloads](https://static.pepy.tech/badge/deepscale)](https://pepy.tech/project/deepscale)
-[![Build](https://badgen.net/badge/build/check-status/blue)](#build-pipeline-status)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/9530/badge)](https://www.bestpractices.dev/projects/9530)
-[![Twitter](https://img.shields.io/twitter/follow/MSFTDeepScale)](https://twitter.com/intent/follow?screen_name=MSFTDeepScale)
-[![Japanese Twitter](https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9ETwitter-%40MSFTDeepScaleJP-blue)](https://twitter.com/MSFTDeepScaleJP)
-[![Chinese Zhihu](https://img.shields.io/badge/%E7%9F%A5%E4%B9%8E-%E5%BE%AE%E8%BD%AFDeepScale-blue)](https://www.zhihu.com/people/deepscale)
-
 # Extreme Speed and Scale for DL Training and Inference
 
 ***[DeepScale](https://www.deepscale.khulnasoft.com/) enables world's most powerful language models like [MT-530B](https://www.microsoft.com/en-us/research/blog/using-deepscale-and-megatron-to-train-megatron-turing-nlg-530b-the-worlds-largest-and-most-powerful-generative-language-model/) and [BLOOM](https://huggingface.co/blog/bloom-megatron-deepscale)***. It is an easy-to-use deep learning optimization software suite that powers unprecedented scale and speed for both training and inference. With DeepScale you can:
@@ -16,6 +7,17 @@
 * Train/Inference on resource constrained GPU systems
 * Achieve unprecedented low latency and high throughput for inference
 * Achieve extreme compression for an unparalleled inference latency and model size reduction with low costs
+
+---
+
+[![License Apache 2.0](https://badgen.net/badge/license/apache2.0/blue)](https://github.com/Microsoft/DeepScale/blob/master/LICENSE)
+[![PyPI version](https://badge.fury.io/py/deepscale.svg)](https://pypi.org/project/deepscale/)
+[![Downloads](https://static.pepy.tech/badge/deepscale)](https://pepy.tech/project/deepscale)
+[![Build](https://badgen.net/badge/build/check-status/blue)](#build-pipeline-status)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/9530/badge)](https://www.bestpractices.dev/projects/9530)
+[![Twitter](https://img.shields.io/twitter/follow/MSFTDeepScale)](https://twitter.com/intent/follow?screen_name=MSFTDeepScale)
+[![Japanese Twitter](https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9ETwitter-%40MSFTDeepScaleJP-blue)](https://twitter.com/MSFTDeepScaleJP)
+[![Chinese Zhihu](https://img.shields.io/badge/%E7%9F%A5%E4%B9%8E-%E5%BE%AE%E8%BD%AFDeepScale-blue)](https://www.zhihu.com/people/deepscale)
 
 ---
 
