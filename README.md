@@ -7,12 +7,6 @@
 [![Japanese Twitter](https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9ETwitter-%40MSFTDeepScaleJP-blue)](https://twitter.com/MSFTDeepScaleJP)
 [![Chinese Zhihu](https://img.shields.io/badge/%E7%9F%A5%E4%B9%8E-%E5%BE%AE%E8%BD%AFDeepScale-blue)](https://www.zhihu.com/people/deepscale)
 
-
-<div align="center">
- <img src="docs/assets/images/DeepScale_light.svg#gh-light-mode-only" width="400px">
- <img src="docs/assets/images/DeepScale_dark_transparent.svg#gh-dark-mode-only" width="400px">
-</div>
-
 <!-- NOTE: we must use html for news items otherwise links will be broken in the 'more news' section -->
 <details>
  <summary>Nnews</summary>
