@@ -65,17 +65,6 @@ DeepScale has been used to train many different large-scale models, below is a l
   * [Turing NLG (17B)](https://www.microsoft.com/en-us/research/blog/turing-nlg-a-17-billion-parameter-language-model-by-microsoft/)
   * [METRO-LM (5.4B)](https://arxiv.org/pdf/2204.06644.pdf)
 
-DeepScale has been integrated with several different popular open-source DL frameworks such as:
-
-|                                                                                                | Documentation                                |
-| ---------------------------------------------------------------------------------------------- | -------------------------------------------- |
-<img src="docs/assets/images/transformers-light.png#gh-light-mode-only" width="250px"><img src="docs/assets/images/transformers-dark.png#gh-dark-mode-only" width="250px"> | [Transformers with DeepScale](https://huggingface.co/docs/transformers/main/main_classes/deepscale) |
-| <img src="docs/assets/images/accelerate-light.png#gh-light-mode-only" width="250px"><img src="docs/assets/images/accelerate-dark.png#gh-dark-mode-only" width="250px"> | [Accelerate with DeepScale](https://huggingface.co/docs/accelerate/usage_guides/deepscale) |
-| <img src="docs/assets/images/lightning-light.svg#gh-light-mode-only" width="200px"><img src="docs/assets/images/lightning-dark.svg#gh-dark-mode-only" width="200px"> | [Lightning with DeepScale](https://lightning.ai/docs/pytorch/stable/advanced/model_parallel.html#deepscale) |
-| <img src="docs/assets/images/mosaicml.svg" width="200px"> | [MosaicML with DeepScale](https://docs.mosaicml.com/projects/composer/en/latest/trainer/using_the_trainer.html?highlight=deepscale#deepscale-integration) |
-| <img src="docs/assets/images/determined.svg" width="225px"> | [Determined with DeepScale](https://docs.determined.ai/latest/training/apis-howto/deepscale/overview.html) |
-| <img src="https://user-images.githubusercontent.com/58739961/187154444-fce76639-ac8d-429b-9354-c6fac64b7ef8.jpg" width=150> | [MMEngine with DeepScale](https://mmengine.readthedocs.io/en/latest/common_usage/large_model_training.html#deepscale) |
-
 ---
 
 # Build Pipeline Status
