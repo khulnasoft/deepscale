@@ -20,7 +20,7 @@ try:
 except ImportError as e:
     dsa2 = None
 
-SUPPORTED_ACCELERATOR_LIST = ['cuda', 'cpu', 'xpu', 'xpu.external', 'npu', 'mps', 'hpu', 'mlu']
+SUPPORTED_ACCELERATOR_LIST = ['cuda', 'cpu', 'xpu', 'xpu.external', 'npu', 'mps', 'hpu', 'mlu', 'sdaa']
 
 ds_accelerator = None
 
@@ -80,6 +80,12 @@ def get_accelerator():
             except ImportError as e:
                 raise ValueError(f"NPU_Accelerator requires torch_npu, which is not installed on this system.")
             pass
+        elif accelerator_name == "sdaa":
+            try:
+                import torch_sdaa  # noqa: F401 # type: ignore
+            except ImportError as e:
+                raise ValueError(f"SDAA_Accelerator requires torch_sdaa, which is not installed on this system.")
+            pass
         elif accelerator_name == "mps":
             try:
                 import torch.mps
@@ -99,6 +105,13 @@ def get_accelerator():
                 import torch_mlu  # noqa: F401
             except ImportError as e:
                 raise ValueError(f"MLU_Accelerator requires torch_mlu, which is not installed on this system.")
+        if accelerator_name is None:
+            try:
+                import torch_sdaa  # noqa: F401,F811 # type: ignore
+
+                accelerator_name = "sdaa"
+            except ImportError as e:
+                pass
         elif accelerator_name not in SUPPORTED_ACCELERATOR_LIST:
             raise ValueError(f'DS_ACCELERATOR must be one of {SUPPORTED_ACCELERATOR_LIST}. '
                              f'Value "{accelerator_name}" is not supported')
