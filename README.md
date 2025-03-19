@@ -136,13 +136,3 @@ All DeepScale documentation, tutorials, and blogs can be found on our website: [
 | [Tutorials](https://www.deepscale.khulnasoft.com/tutorials/)                                               |  Tutorials                                   |
 | [Blogs](https://www.deepscale.khulnasoft.com/posts/)                                                       |  Blogs                                   |
 
-
-# Contributing
-DeepScale welcomes your contributions! Please see our
-[contributing](CONTRIBUTING.md) guide for more details on formatting, testing,
-etc.<br/>
-Thanks so much to all of our amazing contributors!
-
-<a href="https://github.com/khulnasoft/DeepScale/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=khulnasoft/DeepScale&r="  width="800px"/>
-</a>
