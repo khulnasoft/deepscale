@@ -7,22 +7,6 @@
 [![Japanese Twitter](https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9ETwitter-%40MSFTDeepScaleJP-blue)](https://twitter.com/MSFTDeepScaleJP)
 [![Chinese Zhihu](https://img.shields.io/badge/%E7%9F%A5%E4%B9%8E-%E5%BE%AE%E8%BD%AFDeepScale-blue)](https://www.zhihu.com/people/deepscale)
 
-<!-- NOTE: we must use html for news items otherwise links will be broken in the 'more news' section -->
-<details>
- <summary>Nnews</summary>
- <ul>
-  <li>[2023/08] <a href="https://github.com/khulnasoft/DeepScaleExamples/blob/master/inference/huggingface/zero_inference/README.md">DeepScale ZeRO-Inference: 20x faster inference through weight quantization and KV cache offloading</a></li>
-
-  <li>[2023/08] <a href="https://github.com/khulnasoft/DeepScale/tree/master/blogs/deepscale-chat/ds-chat-release-8-31/README.md">DeepScale-Chat: Llama/Llama-2 system support, efficiency boost, and training stability improvements</a></li>
-
-  <li>[2023/08] <a href="https://github.com/khulnasoft/DeepScale/tree/master/blogs/deepscale-ulysses">DeepScale Ulysses: System Optimizations for Enabling Training of Extreme Long Sequence Transformer Models</a> [<a href="https://github.com/khulnasoft/DeepScale/blob/master/blogs/deepscale-ulysses/chinese/README.md">中文</a>] [<a href="https://github.com/khulnasoft/DeepScale/blob/master/blogs/deepscale-ulysses/japanese/README.md">日本語</a>]</li>
-
-  <li>[2023/06] <a href="https://www.microsoft.com/en-us/research/blog/deepscale-zero-a-leap-in-speed-for-llm-and-chat-model-training-with-4x-less-communication/">ZeRO++: A leap in speed for LLM and chat model training with 4X less communication</a> [<a href="https://www.microsoft.com/en-us/research/blog/deepscale-zero-a-leap-in-speed-for-llm-and-chat-model-training-with-4x-less-communication/">English</a>] [<a href="https://github.com/khulnasoft/DeepScale/blob/master/blogs/zeropp/chinese/README.md">中文</a>] [<a href="https://github.com/khulnasoft/DeepScale/blob/master/blogs/zeropp/japanese/README.md">日本語</a>]</li>
- </ul>
-</details>
-
----
-
 # Extreme Speed and Scale for DL Training and Inference
 
 ***[DeepScale](https://www.deepscale.khulnasoft.com/) enables world's most powerful language models like [MT-530B](https://www.microsoft.com/en-us/research/blog/using-deepscale-and-megatron-to-train-megatron-turing-nlg-530b-the-worlds-largest-and-most-powerful-generative-language-model/) and [BLOOM](https://huggingface.co/blog/bloom-megatron-deepscale)***. It is an easy-to-use deep learning optimization software suite that powers unprecedented scale and speed for both training and inference. With DeepScale you can:
